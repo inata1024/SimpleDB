@@ -14,6 +14,11 @@ public class TupleDesc implements Serializable {
     public static class TDItem implements Serializable {
 
         private static final long serialVersionUID = 1L;
+        /**
+         * implements Serializable：类对象存储时可序列化
+         * serialVersionUID：验证序列化和反序列化的过程中,对象是否保持一致
+         * final：相当于const
+         **/
 
         /**
          * The type of the field
@@ -33,7 +38,12 @@ public class TupleDesc implements Serializable {
         public String toString() {
             return fieldName + "(" + fieldType + ")";
         }
+        public String toString_() {
+            return fieldType + "(" + fieldName + ")";
+        }//用于TupleDesc类的toString
+
     }
+
 
     /**
      * @return
@@ -42,10 +52,26 @@ public class TupleDesc implements Serializable {
      * */
     public Iterator<TDItem> iterator() {
         // some code goes here
-        return null;
+        return new TDItemIterator();
     }
 
+    private class TDItemIterator implements Iterator<TDItem> {
+        private int pos = 0;
+        @Override
+        public boolean hasNext() {
+            return TDItems.length > pos;
+        }
+        @Override
+        public TDItem next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return TDItems[pos++];
+        }
+    }
     private static final long serialVersionUID = 1L;
+
+    private TDItem[] TDItems;//储存TDItem的数组
 
     /**
      * Create a new TupleDesc with typeAr.length fields with fields of the
@@ -60,6 +86,11 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
         // some code goes here
+        TDItems=new TDItem[typeAr.length];
+        for(int i=0;i<typeAr.length;i++)
+        {
+            TDItems[i]=new TDItem(typeAr[i],fieldAr[i]);//之前没见过这种构造方式
+        }
     }
 
     /**
@@ -72,6 +103,11 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr) {
         // some code goes here
+        TDItems=new TDItem[typeAr.length];
+        for(int i=0;i<typeAr.length;i++)
+        {
+            TDItems[i]=new TDItem(typeAr[i],null);//之前没见过这种构造方式
+        }
     }
 
     /**
@@ -79,7 +115,8 @@ public class TupleDesc implements Serializable {
      */
     public int numFields() {
         // some code goes here
-        return 0;
+        return TDItems.length;
+
     }
 
     /**
@@ -93,7 +130,10 @@ public class TupleDesc implements Serializable {
      */
     public String getFieldName(int i) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if(i >= 0 && i < TDItems.length)
+            return TDItems[i].fieldName;
+        else
+            throw new NoSuchElementException();
     }
 
     /**
@@ -108,7 +148,10 @@ public class TupleDesc implements Serializable {
      */
     public Type getFieldType(int i) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if(i >= 0 && i < TDItems.length)
+            return TDItems[i].fieldType;
+        else
+            throw new NoSuchElementException();
     }
 
     /**
@@ -122,7 +165,16 @@ public class TupleDesc implements Serializable {
      */
     public int fieldNameToIndex(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+        if(name==null)
+            throw new NoSuchElementException();
+        int ans=0;
+        //String判等：==内存判等，equals()值判等
+        while(ans<TDItems.length && !name.equals(TDItems[ans].fieldName))
+            ans++;
+        if(ans<TDItems.length)
+            return ans;
+        else
+            throw new NoSuchElementException();
     }
 
     /**
@@ -131,7 +183,10 @@ public class TupleDesc implements Serializable {
      */
     public int getSize() {
         // some code goes here
-        return 0;
+        int ans=0;
+        for(int i=0;i<TDItems.length;i++)
+            ans+=TDItems[i].fieldType.getLen();
+        return ans;
     }
 
     /**
@@ -146,7 +201,19 @@ public class TupleDesc implements Serializable {
      */
     public static TupleDesc merge(TupleDesc td1, TupleDesc td2) {
         // some code goes here
-        return null;
+        int l=td1.numFields()+td2.numFields();
+        String[] nameAr=new String[l];
+        Type[] typeAr=new Type[l];
+        for(int i=0;i<td1.numFields();i++) {
+            nameAr[i] = td1.getFieldName(i);
+            typeAr[i]=td1.getFieldType(i);
+        }
+        for(int i=td1.numFields();i<l;i++) {
+            nameAr[i] = td2.getFieldName(i-td1.numFields());
+            typeAr[i]=td2.getFieldType(i-td1.numFields());
+        }
+        return new TupleDesc(typeAr,nameAr);
+
     }
 
     /**
@@ -162,13 +229,37 @@ public class TupleDesc implements Serializable {
 
     public boolean equals(Object o) {
         // some code goes here
+        if(this==o){
+            return true;
+        }
+        if(o instanceof TupleDesc){
+            TupleDesc t = (TupleDesc) o;
+            if(this.numFields()!=t.numFields())
+                return false;
+            for(int i=0;i<this.numFields();i++)
+            {
+                if(TDItems[i].fieldType!=t.getFieldType(i))
+                    return false;
+            }
+            return true;
+        }
+
         return false;
     }
 
     public int hashCode() {
         // If you want to use TupleDesc as keys for HashMap, implement this so
         // that equal objects have equals hashCode() results
-        throw new UnsupportedOperationException("unimplemented");
+        //重写equal()与hashcode() 参考：https://blog.csdn.net/qq_35387940/article/details/107757341
+        int result = 17;
+        String str="";
+        for(int i=0;i<numFields();i++)
+            str+=TDItems[i].fieldType.getLen()+'0';
+
+        result = 31 * result + str.hashCode();//每个type相同
+        result = 31 * result + numFields();//长度相同
+        return result;
+        //throw new UnsupportedOperationException("unimplemented");
     }
 
     /**
@@ -180,6 +271,13 @@ public class TupleDesc implements Serializable {
      */
     public String toString() {
         // some code goes here
-        return "";
+        String ans="";
+        for(int i=0;i<TDItems.length-1;i++)
+        {
+            ans+=TDItems[i].toString_();
+            ans+=",";
+        }
+        ans+=TDItems[TDItems.length-1].toString_();
+        return ans;
     }
 }

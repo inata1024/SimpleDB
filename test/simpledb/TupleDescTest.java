@@ -15,6 +15,7 @@ public class TupleDescTest extends SimpleDbTestBase {
     /**
      * Unit test for TupleDesc.combine()
      */
+    
     @Test public void combine() {
         TupleDesc td1, td2, td3;
 
