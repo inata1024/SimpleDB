@@ -12,11 +12,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * The BufferPool is also responsible for locking;  when a transaction fetches
  * a page, BufferPool checks that the transaction has the appropriate
  * locks to read/write the page.
- * 
+ *
  * @Threadsafe, all fields are final
  */
 public class BufferPool {
     /** Bytes per page, including header. */
+    private ConcurrentHashMap<PageId,Page> id2pg;
+    private int maxPagenum;
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
@@ -33,6 +35,8 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
+        id2pg=new ConcurrentHashMap<PageId,Page>();
+        maxPagenum=numPages;
     }
     
     public static int getPageSize() {
@@ -67,7 +71,18 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if(id2pg.size()==maxPagenum)
+            throw new DbException("DbException");
+        if(id2pg.containsKey(pid))
+            return id2pg.get(pid);
+        else
+        {
+
+            DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
+            Page newPage = table.readPage(pid);
+            id2pg.put(pid, newPage);
+            return newPage;
+        }
     }
 
     /**
