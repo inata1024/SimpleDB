@@ -10,6 +10,8 @@ public class RecordId implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private PageId pgId;//已经包含table和page的信息
+    private int tupleNo;
     /**
      * Creates a new RecordId referring to the specified PageId and tuple
      * number.
@@ -21,6 +23,8 @@ public class RecordId implements Serializable {
      */
     public RecordId(PageId pid, int tupleno) {
         // some code goes here
+        pgId=pid;
+        tupleNo=tupleno;
     }
 
     /**
@@ -28,7 +32,7 @@ public class RecordId implements Serializable {
      */
     public int getTupleNumber() {
         // some code goes here
-        return 0;
+        return pgId.getTableId();
     }
 
     /**
@@ -36,7 +40,7 @@ public class RecordId implements Serializable {
      */
     public PageId getPageId() {
         // some code goes here
-        return null;
+        return pgId;
     }
 
     /**
@@ -48,7 +52,11 @@ public class RecordId implements Serializable {
     @Override
     public boolean equals(Object o) {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        if(!(o instanceof RecordId))
+            return false;
+        RecordId r = (RecordId) o;
+        return pgId == r.pgId && tupleNo == r.tupleNo;
+        //throw new UnsupportedOperationException("implement this");
     }
 
     /**
@@ -60,7 +68,8 @@ public class RecordId implements Serializable {
     @Override
     public int hashCode() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return pgId.hashCode()+tupleNo*31*31;
+        //throw new UnsupportedOperationException("implement this");
 
     }
 

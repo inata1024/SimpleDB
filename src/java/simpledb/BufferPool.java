@@ -77,7 +77,6 @@ public class BufferPool {
             return id2pg.get(pid);
         else
         {
-
             DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page newPage = table.readPage(pid);
             id2pg.put(pid, newPage);
