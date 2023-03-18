@@ -60,7 +60,6 @@ public class HeapPage implements Page {
             e.printStackTrace();
         }
         dis.close();
-
         setBeforeImage();
     }
 
@@ -285,7 +284,27 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int ones=0;
+        for(int i=0;i<getHeaderSize()-1;i++)
+            ones+=oneNum(header[i]);
+        byte temp=header[getHeaderSize()-1];
+        for(int i=0;i<((numSlots%8==0)?8:numSlots%8);i++)
+        {
+            ones+=(temp%2==0)?0:1;
+            temp= (byte) (temp>>1);
+        }
+        return numSlots-ones;
+    }
+    //判断一个byte有几个1
+    private static int oneNum(byte b){
+        int ans=0;
+        for(int i=0;i<8;i++)
+        {
+            if(b%2!=0)
+                ans++;
+            b= (byte) (b>>1);
+        }
+        return ans;
     }
 
     /**
@@ -293,7 +312,9 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
-        return false;
+        byte temp=header[i/8];
+        temp= (byte) (temp>>i%8);
+        return temp%2!=0;
     }
 
     /**
@@ -310,8 +331,31 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        return new Iterator<Tuple>() {
+            private int pos=-1;//记录当前位置
+            private int next;
+            @Override
+            public boolean hasNext() {
+                next=pos+1;
+                while(next<numSlots) {
+                    if(isSlotUsed(next))
+                        return true;
+                    next++;
+                }
+                return false;
+            }
+
+            @Override
+            public Tuple next() {
+                if (!hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                pos=next;
+                return tuples[pos];
+            }
+        };
     }
+
 
 }
 

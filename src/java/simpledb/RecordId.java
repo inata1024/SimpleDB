@@ -32,7 +32,7 @@ public class RecordId implements Serializable {
      */
     public int getTupleNumber() {
         // some code goes here
-        return pgId.getTableId();
+        return tupleNo;
     }
 
     /**
@@ -55,7 +55,8 @@ public class RecordId implements Serializable {
         if(!(o instanceof RecordId))
             return false;
         RecordId r = (RecordId) o;
-        return pgId == r.pgId && tupleNo == r.tupleNo;
+        //自定义类型判等：equals
+        return pgId.equals(r.pgId) && tupleNo == r.tupleNo;
         //throw new UnsupportedOperationException("implement this");
     }
 
