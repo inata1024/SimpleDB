@@ -1,5 +1,7 @@
 package simpledb;
 
+import com.sun.deploy.panel.ITreeNode;
+
 import java.io.*;
 import java.util.*;
 
@@ -15,6 +17,8 @@ import java.util.*;
  */
 public class HeapFile implements DbFile {
 
+    private File f;
+    private TupleDesc td;
     /**
      * Constructs a heap file backed by the specified file.
      * 
@@ -24,6 +28,8 @@ public class HeapFile implements DbFile {
      */
     public HeapFile(File f, TupleDesc td) {
         // some code goes here
+        this.f=f;
+        this.td=td;
     }
 
     /**
@@ -33,7 +39,7 @@ public class HeapFile implements DbFile {
      */
     public File getFile() {
         // some code goes here
-        return null;
+        return f;
     }
 
     /**
@@ -47,7 +53,8 @@ public class HeapFile implements DbFile {
      */
     public int getId() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return f.getAbsoluteFile().hashCode();
+        //throw new UnsupportedOperationException("implement this");
     }
 
     /**
@@ -57,14 +64,29 @@ public class HeapFile implements DbFile {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return td;
+        //throw new UnsupportedOperationException("implement this");
     }
 
     // see DbFile.java for javadocs
-    public Page readPage(PageId pid) {
+    public Page readPage(PageId pid) throws IllegalArgumentException {
         // some code goes here
-        return null;
+        long offset = pid.getPageNumber() * BufferPool.getPageSize();
+        byte[] data = new byte[BufferPool.getPageSize()];
+        try {
+            RandomAccessFile rFile = new RandomAccessFile(f, "r");
+            rFile.seek(offset);
+            for (int i = 0; i < BufferPool.getPageSize(); i++) {
+                data[i] = (byte) rFile.read();
+            }
+            HeapPage page = new HeapPage((HeapPageId) pid, data);
+            rFile.close();
+            return page;
+        } catch (Exception e) {
+            return null;
+        }
     }
+
 
     // see DbFile.java for javadocs
     public void writePage(Page page) throws IOException {
@@ -77,7 +99,7 @@ public class HeapFile implements DbFile {
      */
     public int numPages() {
         // some code goes here
-        return 0;
+        return (int)(f.length() / BufferPool.getPageSize());
     }
 
     // see DbFile.java for javadocs
@@ -99,8 +121,100 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        return null;
+        return new HeapFileIterator(this,tid);
     }
+
+    //为什么BtreeFile里面的iterator用的是extends，而有的地方是implements
+    //因为DbFileIterator是一个Interface
+    class HeapFileIterator implements DbFileIterator {
+
+
+        private HeapPage pg;
+
+        private Iterator<Tuple> it = null;
+        private int pgNo;//与pg重复了
+        private TransactionId tid;
+        private HeapFile f;
+
+        public HeapFileIterator(HeapFile f, TransactionId tid) {
+            this.f = f;
+            this.tid = tid;
+        }
+
+        /**
+         * Open this iterator by getting an iterator on the first page
+         */
+        public void open() throws DbException, TransactionAbortedException {
+            pgNo=0;
+            HeapPageId pid=new HeapPageId(getId(),0);
+            pg=(HeapPage) Database.getBufferPool().getPage(tid,pid,Permissions.READ_ONLY);
+            it = pg.iterator();
+        }
+
+        @Override
+        public boolean hasNext() throws TransactionAbortedException, DbException {
+            if(it==null)
+                return false;
+            if(it.hasNext())
+                return true;
+            //为了使调用hasNext不影响当前状态，所有变量都copy一份
+            int npgNo=pgNo;
+            while(npgNo<numPages()-1)//下一个page存在的情况下，直到找到不为空的slot
+            {
+                try{//为什么要try？？
+                    HeapPageId pid=new HeapPageId(getId(),++npgNo);
+                    HeapPage npg=(HeapPage) Database.getBufferPool().getPage(tid,pid,Permissions.READ_ONLY);
+                    Iterator<Tuple> nit = npg.iterator();
+                    if(nit.hasNext())
+                        return true;
+                }
+                catch (Exception e){
+                    e.printStackTrace();
+                    System.exit(1);
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public Tuple next() throws NoSuchElementException, TransactionAbortedException, DbException {
+            if(!this.hasNext())
+                throw new NoSuchElementException();
+            if(it.hasNext())
+                return it.next();
+            while(pgNo<numPages()-1)//下一个page存在的情况下，直到找到不为空的slot
+            {
+                HeapPageId pid=new HeapPageId(getId(),++pgNo);
+                pg=(HeapPage) Database.getBufferPool().getPage(tid,pid,Permissions.READ_ONLY);
+                it = pg.iterator();
+                if(it.hasNext())
+                    return it.next();
+            }
+               return null;
+        }
+
+        /**
+         * rewind this iterator back to the beginning of the tuples
+         */
+        public void rewind() throws DbException, TransactionAbortedException {
+            close();
+            open();
+        }
+
+        /**
+         * close the iterator
+         */
+        public void close() {
+            pg=null;
+            pgNo=0;
+            it = null;
+            f=null;
+            tid=null;
+
+        }
+    }
+
+
 
 }
 
