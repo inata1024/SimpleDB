@@ -127,8 +127,6 @@ public class HeapFile implements DbFile {
     //为什么BtreeFile里面的iterator用的是extends，而有的地方是implements
     //因为DbFileIterator是一个Interface
     class HeapFileIterator implements DbFileIterator {
-
-
         private HeapPage pg;
 
         private Iterator<Tuple> it = null;

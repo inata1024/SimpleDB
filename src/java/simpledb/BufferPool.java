@@ -71,12 +71,12 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        if(id2pg.size()==maxPagenum)
-            throw new DbException("DbException");
         if(id2pg.containsKey(pid))
             return id2pg.get(pid);
         else
         {
+            if(id2pg.size()==maxPagenum)
+                throw new DbException("DbException");
             DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page newPage = table.readPage(pid);
             id2pg.put(pid, newPage);

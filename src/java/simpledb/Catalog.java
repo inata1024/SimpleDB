@@ -18,20 +18,20 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
-    private HashMap<Integer,DbFile> id2file;
-    private HashMap<Integer,String> id2name;
-    private HashMap<Integer,String> id2pk;
-    private HashMap<String,Integer> name2id;
+    private ConcurrentHashMap<Integer,DbFile> id2file;
+    private ConcurrentHashMap<Integer,String> id2name;
+    private ConcurrentHashMap<Integer,String> id2pk;
+    private ConcurrentHashMap<String,Integer> name2id;
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
         // some code goes here
-        id2file=new HashMap<Integer,DbFile>();
-        id2name=new HashMap<Integer,String>();
-        id2pk=new HashMap<Integer,String>();
-        name2id=new HashMap<String,Integer>();
+        id2file=new ConcurrentHashMap<>();
+        id2name=new ConcurrentHashMap<>();
+        id2pk=new ConcurrentHashMap<>();
+        name2id=new ConcurrentHashMap<>();
 
     }
 

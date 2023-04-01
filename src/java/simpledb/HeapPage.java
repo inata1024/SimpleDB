@@ -17,8 +17,8 @@ public class HeapPage implements Page {
 
     final HeapPageId pid;
     final TupleDesc td;
-    final byte header[];
-    final Tuple tuples[];
+    final byte[] header;
+    final Tuple[] tuples;
     final int numSlots;
 
     byte[] oldData;
@@ -56,9 +56,6 @@ public class HeapPage implements Page {
             // allocate and read the actual records of this page
             for (int i=0; i<tuples.length; i++)
                 tuples[i] = readNextTuple(dis,i);
-
-            int j=0;
-
         }catch(NoSuchElementException e){
             e.printStackTrace();
         }
@@ -72,19 +69,18 @@ public class HeapPage implements Page {
     private int getNumTuples() {        
         // some code goes here
         return  (BufferPool.getPageSize()*8) / (td.getSize() * 8 + 1);
-
     }
 
     /**
      * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
-    private int getHeaderSize() {        
-        
+    private int getHeaderSize() {
         // some code goes here
         return (int) Math.ceil(getNumTuples() / 8.0);
         //原来这里写错了，debug3小时
-        //return (int) ceil(numSlots / 8.0);
+        //numSlots/8 返回int numSlots/8.0 返回小数
+        //return (int) ceil(numSlots / 8);
                  
     }
     

@@ -17,8 +17,8 @@ public interface DbFileIterator{
     public boolean hasNext()
         throws DbException, TransactionAbortedException;
 
-    /**
-     * Gets the next tuple from the operator (typically implementing by reading
+    /** tu
+     *      * Gets the nextple from the operator (typically implementing by reading
      * from a child operator or an access method).
      *
      * @return The next tuple in the iterator.

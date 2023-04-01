@@ -8,7 +8,6 @@ import java.util.*;
  * disk).
  */
 public class SeqScan implements OpIterator {
-
     private static final long serialVersionUID = 1L;
     private TransactionId tid;
     private int tableid;
@@ -99,7 +98,6 @@ public class SeqScan implements OpIterator {
     public TupleDesc getTupleDesc() {
         // some code goes here
         TupleDesc td=f.getTupleDesc();
-
         Type[] typeAr=new Type[td.numFields()];
         String[] fieldAr=new String[td.numFields()];
         Iterator<TupleDesc.TDItem> tdIt= td.iterator();

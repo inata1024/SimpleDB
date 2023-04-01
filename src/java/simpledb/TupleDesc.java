@@ -89,7 +89,7 @@ public class TupleDesc implements Serializable {
         TDItems=new TDItem[typeAr.length];
         for(int i=0;i<typeAr.length;i++)
         {
-            TDItems[i]=new TDItem(typeAr[i],fieldAr[i]);//之前没见过这种构造方式
+            TDItems[i]=new TDItem(typeAr[i],fieldAr[i]);
         }
     }
 
@@ -106,7 +106,7 @@ public class TupleDesc implements Serializable {
         TDItems=new TDItem[typeAr.length];
         for(int i=0;i<typeAr.length;i++)
         {
-            TDItems[i]=new TDItem(typeAr[i],null);//之前没见过这种构造方式
+            TDItems[i]=new TDItem(typeAr[i],null);
         }
     }
 
@@ -254,7 +254,7 @@ public class TupleDesc implements Serializable {
         int result = 17;
         String str="";
         for(int i=0;i<numFields();i++)
-            str+=TDItems[i].fieldType.getLen()+'0';
+            str+=((Integer)TDItems[i].fieldType.getLen()).toString();
 
         result = 31 * result + str.hashCode();//每个type相同
         result = 31 * result + numFields();//长度相同
