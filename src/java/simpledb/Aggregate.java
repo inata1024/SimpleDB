@@ -2,6 +2,8 @@ package simpledb;
 
 import java.util.*;
 
+import static simpledb.Aggregator.NO_GROUPING;
+
 /**
  * The Aggregation operator that computes an aggregate (e.g., sum, avg, max,
  * min). Note that we only support aggregates over a single column, grouped by a
@@ -10,6 +12,14 @@ import java.util.*;
 public class Aggregate extends Operator {
 
     private static final long serialVersionUID = 1L;
+    private OpIterator child;
+    private int gfield;
+    private Type gfieldType;
+    private int afield;
+    private Aggregator.Op op;
+    private TupleDesc td;//child的TupleDesc
+    private Aggregator agg;//根据afieldType进行初始化,afieldType由child的TupleDesc决定
+    private OpIterator aggIt;//聚合结果的迭代器
 
     /**
      * Constructor.
@@ -31,6 +41,16 @@ public class Aggregate extends Operator {
      */
     public Aggregate(OpIterator child, int afield, int gfield, Aggregator.Op aop) {
 	// some code goes here
+        this.child=child;
+        this.gfield=gfield;
+        this.afield=afield;
+        this.op=aop;
+        td=child.getTupleDesc();
+        if(gfield!=NO_GROUPING)
+            gfieldType=td.getFieldType(gfield);
+        agg = (td.getFieldType(afield)==Type.INT_TYPE )?
+                new IntegerAggregator(gfield,gfieldType,afield,aop):
+                new StringAggregator(gfield,gfieldType,afield,aop);
     }
 
     /**
@@ -40,7 +60,7 @@ public class Aggregate extends Operator {
      * */
     public int groupField() {
 	// some code goes here
-	return -1;
+        return gfield==-1? NO_GROUPING:gfield;
     }
 
     /**
@@ -50,7 +70,7 @@ public class Aggregate extends Operator {
      * */
     public String groupFieldName() {
 	// some code goes here
-	return null;
+	    return td.getFieldName(gfield);
     }
 
     /**
@@ -58,7 +78,7 @@ public class Aggregate extends Operator {
      * */
     public int aggregateField() {
 	// some code goes here
-	return -1;
+	    return afield;
     }
 
     /**
@@ -67,7 +87,7 @@ public class Aggregate extends Operator {
      * */
     public String aggregateFieldName() {
 	// some code goes here
-	return null;
+	    return td.getFieldName(afield);
     }
 
     /**
@@ -75,16 +95,22 @@ public class Aggregate extends Operator {
      * */
     public Aggregator.Op aggregateOp() {
 	// some code goes here
-	return null;
+	    return op;
     }
 
     public static String nameOfAggregatorOp(Aggregator.Op aop) {
-	return aop.toString();
+	    return aop.toString();
     }
 
     public void open() throws NoSuchElementException, DbException,
 	    TransactionAbortedException {
 	// some code goes here
+        child.open();
+        super.open();//这里需要super.open吗
+        while(child.hasNext())
+            agg.mergeTupleIntoGroup(child.next());
+        aggIt=agg.iterator();
+        aggIt.open();
     }
 
     /**
@@ -96,11 +122,14 @@ public class Aggregate extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
 	// some code goes here
-	return null;
+	    while(aggIt.hasNext())
+            return aggIt.next();
+        return null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
 	// some code goes here
+        aggIt.rewind();
     }
 
     /**
@@ -116,22 +145,37 @@ public class Aggregate extends Operator {
      */
     public TupleDesc getTupleDesc() {
 	// some code goes here
-	return null;
+        if(gfield==NO_GROUPING)
+        {
+            Type[] t=new Type[]{td.getFieldType(afield)};
+            String[] n=new String[]{op.toString()+' '+aggregateFieldName()};
+            return new TupleDesc(t,n);
+        }
+        else
+        {
+            Type[] t=new Type[]{gfieldType,td.getFieldType(afield)};
+            String[] n=new String[]{groupFieldName(),op.toString()+' '+aggregateFieldName()};
+            return new TupleDesc(t,n);
+        }
     }
 
     public void close() {
 	// some code goes here
+        super.close();
+        child.close();
+        aggIt.close();
     }
 
     @Override
     public OpIterator[] getChildren() {
 	// some code goes here
-	return null;
+	    return new OpIterator[]{child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
 	// some code goes here
+        child=children[0];
     }
     
 }

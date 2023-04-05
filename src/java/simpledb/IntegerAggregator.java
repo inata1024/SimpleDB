@@ -1,4 +1,9 @@
 package simpledb;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+import static simpledb.Aggregator.Op.*;
+import static simpledb.Type.INT_TYPE;
 
 /**
  * Knows how to compute some aggregate over a set of IntFields.
@@ -7,6 +12,14 @@ public class IntegerAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
 
+    private int gbfield;
+    private Type gbfieldtype;
+    private int afield;
+    private Op op;
+    private HashMap<Field,Integer> field2int;
+    private HashMap<Field,Integer> avgCount;//记录avg中，每组的元素个数
+    private HashMap<Field,Integer> avgSum;//记录avg的sum
+    private TupleDesc td;
     /**
      * Aggregate constructor
      * 
@@ -24,6 +37,16 @@ public class IntegerAggregator implements Aggregator {
 
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
+        this.gbfield=gbfield;
+        this.gbfieldtype=gbfieldtype;
+        this.afield=afield;
+        this.op=what;
+        field2int=new HashMap<>();
+        avgCount=new HashMap<>();
+        avgSum=new HashMap<>();
+        td = gbfield != NO_GROUPING?
+                new TupleDesc(new Type[]{gbfieldtype,INT_TYPE}):
+                new TupleDesc(new Type[]{INT_TYPE});
     }
 
     /**
@@ -35,11 +58,73 @@ public class IntegerAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
+        Field currField=(gbfield!=NO_GROUPING)?//当前gbfield,为避免越界，需要判断
+                tup.getField(gbfield):
+                new IntField(0);//作为NO_GROUPING时的辅助field
+        int curr=((IntField)tup.getField(afield)).getValue();//当前AggregateField中的值
+        if(op==MIN)
+        {
+            if(field2int.containsKey(currField))
+            {
+                int pre=field2int.get(currField);//已有的min值
+                field2int.put(currField,Math.min(pre,curr));
+            }
+            else
+                field2int.put(currField,curr);
+        }
+        if(op==MAX)
+        {
+            if (field2int.containsKey(currField)) {
+                int pre = field2int.get(currField);//已有的max值
+                field2int.put(currField, Math.max(pre, curr));
+            } else
+                field2int.put(currField, curr);
+        }
+        if(op==SUM)
+        {
+            if(field2int.containsKey(currField))
+            {
+                int pre=field2int.get(currField);//已有的sum值
+                field2int.put(currField,pre+curr);
+            }
+            else
+                field2int.put(currField,curr);
+        }
+        if(op==AVG)//必须用sum/count，不能每次都除，因为每次都有舍入误差
+        {
+            if(field2int.containsKey(currField))
+            {
+                int size=avgCount.get(currField);
+                int pre=avgSum.get(currField);
+                avgSum.put(currField,pre+curr);//更新当前sum
+                avgCount.put(currField,size+1);//更新当前count
+                field2int.put(currField,avgSum.get(currField)/avgCount.get(currField));//更新当前avg
+            }
+            else
+            {
+                avgCount.put(currField, 1);
+                avgSum.put(currField, curr);
+                field2int.put(currField, curr);
+            }
+        }
+
+        if(op==COUNT)
+        {
+            int size=field2int.size();
+            if(field2int.containsKey(currField))
+            {
+                int pre=field2int.get(currField);//已有的count值
+                field2int.put(currField,pre+1);
+            }
+            else
+                field2int.put(currField,1);
+        }
     }
+
 
     /**
      * Create a OpIterator over group aggregate results.
-     * 
+     *
      * @return a OpIterator whose tuples are the pair (groupVal, aggregateVal)
      *         if using group, or a single (aggregateVal) if no grouping. The
      *         aggregateVal is determined by the type of aggregate specified in
@@ -47,8 +132,21 @@ public class IntegerAggregator implements Aggregator {
      */
     public OpIterator iterator() {
         // some code goes here
-        throw new
-        UnsupportedOperationException("please implement me for lab2");
+        ArrayList<Tuple> tuples = new ArrayList<>();
+        for (HashMap.Entry<Field, Integer> map : field2int.entrySet()) {
+            Tuple t = new Tuple(td);
+            if (gbfield==NO_GROUPING)
+            {
+                t.setField(0, new IntField(map.getValue()));
+            }
+            else
+            {
+                t.setField(0, map.getKey());
+                t.setField(1, new IntField(map.getValue()));
+            }
+            tuples.add(t);
+        }
+        return new TupleIterator(td, tuples);
     }
 
 }
