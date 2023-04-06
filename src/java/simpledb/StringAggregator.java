@@ -48,30 +48,19 @@ public class StringAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
-        IntField tempf=new IntField(0);//作为NO_GROUPING时的辅助field
-        //默认为count
+        //默认为COUNT
+        Field currField=(gbfield!=NO_GROUPING)?//当前gbfield,为避免越界，需要判断
+                tup.getField(gbfield):
+                new IntField(0);//作为NO_GROUPING时的辅助field
+
         int size=field2int.size();
-        if(gbfieldtype==null)//若NO_GROUPING
+        if(field2int.containsKey(currField))
         {
-            if(field2int.containsKey(tempf))
-            {
-                int pre=field2int.get(tempf);//已有的count值
-                field2int.put(tempf,pre+1);
-            }
-            else
-                field2int.put(tempf,1);
+            int pre=field2int.get(currField);//已有的count值
+            field2int.put(currField,pre+1);
         }
         else
-        {
-            if(field2int.containsKey(tup.getField(gbfield)))
-            {
-                int pre=field2int.get(tup.getField(gbfield));//已有的count值
-                field2int.put(tup.getField(gbfield),pre+1);
-            }
-            else
-                field2int.put(tup.getField(gbfield),1);
-        }
-
+            field2int.put(currField,1);
     }
 
     /**

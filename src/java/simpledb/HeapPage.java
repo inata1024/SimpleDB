@@ -1,5 +1,6 @@
 package simpledb;
 
+import javax.print.attribute.standard.PrinterInfo;
 import java.util.*;
 import java.io.*;
 
@@ -20,9 +21,11 @@ public class HeapPage implements Page {
     final byte[] header;
     final Tuple[] tuples;
     final int numSlots;
-
     byte[] oldData;
     private final Byte oldDataLock=new Byte((byte)0);
+    private boolean dirty=false;
+    private TransactionId dirtyTID=null;
+
 
     /**
      * Create a HeapPage from a set of bytes of data read from disk.
@@ -115,7 +118,6 @@ public class HeapPage implements Page {
     public HeapPageId getId() {
     // some code goes here
         return pid;
-    //throw new UnsupportedOperationException("implement this");
     }
 
     /**
@@ -238,6 +240,7 @@ public class HeapPage implements Page {
         return new byte[len]; //all 0
     }
 
+
     /**
      * Delete the specified tuple from the page; the corresponding header bit should be updated to reflect
      *   that it is no longer stored on any page.
@@ -247,7 +250,11 @@ public class HeapPage implements Page {
      */
     public void deleteTuple(Tuple t) throws DbException {
         // some code goes here
-        // not necessary for lab1
+        //懒惰删除，不操作tuples
+        int pos=t.getRecordId().getTupleNumber();
+        if(t.getRecordId().getPageId()!=this.pid||!isSlotUsed(pos))
+            throw new DbException("this tuple is not on this page, or tuple slot is already empty.");
+        markSlotUsed(pos,false);
     }
 
     /**
@@ -259,7 +266,16 @@ public class HeapPage implements Page {
      */
     public void insertTuple(Tuple t) throws DbException {
         // some code goes here
-        // not necessary for lab1
+        if(getNumEmptySlots()==0||!t.getTupleDesc().equals(td))//这里必须用equals
+            throw new DbException("the page is full (no empty slots) or tupledesc is mismatch");
+        int pos=0;
+        while(pos<numSlots&&isSlotUsed(pos))//经过之前的检查，一定能找到
+            pos++;
+        if(pos==numSlots)//万无一失
+            throw new DbException("pos error");
+        markSlotUsed(pos,true);
+        t.setRecordId(new RecordId(pid,pos));
+        tuples[pos]=t;
     }
 
     /**
@@ -269,6 +285,9 @@ public class HeapPage implements Page {
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
 	// not necessary for lab1
+        //如果没有dirty，tid可以不为null吗
+        this.dirty=dirty;
+        dirtyTID=tid;
     }
 
     /**
@@ -277,7 +296,10 @@ public class HeapPage implements Page {
     public TransactionId isDirty() {
         // some code goes here
 	// Not necessary for lab1
-        return null;      
+        //没太搞懂原理
+        if(!dirty)
+            return null;
+        return dirtyTID;
     }
 
     /**
@@ -323,7 +345,9 @@ public class HeapPage implements Page {
      */
     private void markSlotUsed(int i, boolean value) {
         // some code goes here
-        // not necessary for lab1
+        byte temp=header[i/8];
+        temp+=value?1<<(i%8):-1<<(i%8);
+        header[i/8]=temp;
     }
 
     /**
