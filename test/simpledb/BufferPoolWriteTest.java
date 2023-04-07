@@ -35,11 +35,13 @@ public class BufferPoolWriteTest extends TestUtil.CreateHeapFile {
     		ArrayList<Page> dirtypages = new ArrayList<Page>();
     		for(int i = 0; i < duplicates; i++) {
     			// create a blank page
+				//在文件后面写一个新page，numPage()+1
     			BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(super.getFile(), true));
                 byte[] emptyData = HeapPage.createEmptyPageData();
                 bw.write(emptyData);
                 bw.close();
-    			HeapPage p = new HeapPage(new HeapPageId(super.getId(), super.numPages() - 1), //这里的numPages始终是1，达不到每次插到newPage的效果啊
+				//每次都在新写入的page上插入
+    			HeapPage p = new HeapPage(new HeapPageId(super.getId(), super.numPages() - 1),
     					HeapPage.createEmptyPageData());
     	        p.insertTuple(t);
     			dirtypages.add(p);

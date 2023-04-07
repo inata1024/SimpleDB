@@ -9,6 +9,11 @@ import java.io.IOException;
 public class Delete extends Operator {
 
     private static final long serialVersionUID = 1L;
+    private TransactionId t;
+    private OpIterator child;
+    private int tableId;
+    private TupleDesc td;
+    private boolean hasDelete;
 
     /**
      * Constructor specifying the transaction that this delete belongs to as
@@ -21,23 +26,34 @@ public class Delete extends Operator {
      */
     public Delete(TransactionId t, OpIterator child) {
         // some code goes here
+        this.t=t;
+        this.child=child;
+        //String域必须为null
+        td = new TupleDesc(new Type[]{Type.INT_TYPE}, new String[]{null});
     }
 
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return td;
     }
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
+        hasDelete=false;
+        child.open();
+        super.open();
     }
 
     public void close() {
         // some code goes here
+        child.close();
+        super.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        child.rewind();
+        hasDelete=false;//插入可以rewind，delete可以吗
     }
 
     /**
@@ -51,18 +67,39 @@ public class Delete extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if(hasDelete)
+            return null;
+        BufferPool bp=Database.getBufferPool();
+        int count=0;
+        while(child.hasNext())
+        {
+            Tuple tp=child.next();
+            //父类没有抛出IOException，所以这里必须处理一下bp.insertTuple可能抛出的IOException
+            try{
+                bp.deleteTuple(t,tp);
+            }
+            catch (IOException e){
+                e.printStackTrace();
+            }
+            count++;
+        }
+        Tuple ans=new Tuple(getTupleDesc());
+        ans.setField(0,new IntField(count));
+        hasDelete=true;
+        return ans;
+
     }
 
     @Override
     public OpIterator[] getChildren() {
         // some code goes here
-        return null;
+        return new OpIterator[]{child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
         // some code goes here
+        child=children[0];
     }
 
 }

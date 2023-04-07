@@ -150,9 +150,11 @@ public class BufferPool {
         // not necessary for lab1
         ArrayList<Page> pgs=new ArrayList<>();
         DbFile table = Database.getCatalog().getDatabaseFile(tableId);
-
+        //疑惑：为什么要把dirty page放到cache中？
+        //而且BuffferPoolWriteTest中handleManyDirtyPages也很奇怪，为什么插几个
+        //需要考虑多个page受影响的情况
         pgs=table.insertTuple(tid,t);
-        for(int i=0;i<pgs.size();i++)
+        for(int i=0;i<pgs.size();i++)//将dirty page加入cache
             id2pg.put(pgs.get(i).getId(),pgs.get(i));
     }
 
@@ -173,11 +175,13 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
-        Page pg=null;
+        ArrayList<Page> pgs=new ArrayList<>();
+
         int tableID=t.getRecordId().getPageId().getTableId();
         DbFile table = Database.getCatalog().getDatabaseFile(tableID);
-        pg=table.deleteTuple(tid,t).get(0);
-        id2pg.put(pg.getId(),pg);
+        pgs=table.deleteTuple(tid,t);
+        for(int i=0;i<pgs.size();i++)
+            id2pg.put(pgs.get(i).getId(),pgs.get(i));
     }
 
     /**
