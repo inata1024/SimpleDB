@@ -2,8 +2,10 @@ package simpledb;
 
 import java.io.*;
 
-import java.util.ArrayList;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountedCompleter;
+
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -19,10 +21,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BufferPool {
     /** Bytes per page, including header. */
     private ConcurrentHashMap<PageId,Page> id2pg;
+    private ConcurrentHashMap<PageId, Date> id2date;//记录bp中page的访问时间
     private int maxPagenum;
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
+    private int Policy=1;//1：LRU 2：MRU 3：随机策略 默认为LRU
     
     /** Default number of pages passed to the constructor. This is used by
     other classes. BufferPool should use the numPages argument to the
@@ -37,6 +41,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // some code goes here
         id2pg=new ConcurrentHashMap<PageId,Page>();
+        id2date=new ConcurrentHashMap<>();
         maxPagenum=numPages;
     }
     
@@ -73,14 +78,20 @@ public class BufferPool {
         throws TransactionAbortedException, DbException {
         // some code goes here
         if(id2pg.containsKey(pid))
+        {
+            id2date.put(pid,new Date());
             return id2pg.get(pid);
+        }
         else
         {
             if(id2pg.size()==maxPagenum)
-                throw new DbException("DbException");
+            {
+                evictPage();
+            }
             DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
             Page newPage = table.readPage(pid);
             id2pg.put(pid, newPage);
+            id2date.put(pid,new Date());//记录请求当前页的时间
             return newPage;
         }
     }
@@ -154,8 +165,14 @@ public class BufferPool {
         //而且BuffferPoolWriteTest中handleManyDirtyPages也很奇怪，为什么插几个
         //需要考虑多个page受影响的情况
         pgs=table.insertTuple(tid,t);
-        for(int i=0;i<pgs.size();i++)//将dirty page加入cache
-            id2pg.put(pgs.get(i).getId(),pgs.get(i));
+        //将dirty page加入cache,并更新其访问时间 潜在隐患：for循环内更新的多个page date可能相同
+        //不过这个时间应该也不需要太精确
+        for(int i=0;i<pgs.size();i++)
+        {
+            PageId pid=pgs.get(i).getId();
+            id2pg.put(pid, pgs.get(i));
+            id2date.put(pid,new Date());
+        }
     }
 
     /**
@@ -181,7 +198,11 @@ public class BufferPool {
         DbFile table = Database.getCatalog().getDatabaseFile(tableID);
         pgs=table.deleteTuple(tid,t);
         for(int i=0;i<pgs.size();i++)
-            id2pg.put(pgs.get(i).getId(),pgs.get(i));
+        {
+            PageId pid=pgs.get(i).getId();
+            id2pg.put(pid, pgs.get(i));
+            id2date.put(pid,new Date());
+        }
     }
 
     /**
@@ -192,6 +213,10 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
+        Set<PageId> pids = new HashSet<PageId>(id2pg.keySet());
+        for(PageId pid : pids) {
+            flushPage(pid);
+        }
 
     }
 
@@ -206,6 +231,8 @@ public class BufferPool {
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        id2date.remove(pid);
+        id2pg.remove(pid);
     }
 
     /**
@@ -215,6 +242,14 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        if(!id2pg.containsKey(pid))//如果bp里面没有这个page
+            return;
+        Page pg=id2pg.get(pid);//取出page
+        if(pg.isDirty()==null)//如果不dirty
+            return;
+        pg.markDirty(false,null);//去掉dirty标记
+        Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(pg);//写入文件
+        id2pg.put(pid,pg);//更新BufferPool
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -228,9 +263,76 @@ public class BufferPool {
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
-    private synchronized  void evictPage() throws DbException {
+    private synchronized  void evictPage() throws DbException,IllegalArgumentException {
         // some code goes here
         // not necessary for lab1
-    }
+        // LRU policy / MRU policy
+        // 遍历id2pg找出latest/most recently
+        PageId evictPgId=null;//待驱逐PageId
+        Set<PageId> pids = new HashSet<PageId>(id2date.keySet());
+        Date evictDate=new Date();
+        //根据policy获取evictPgId
+        switch (Policy)
+        {
+            case 1:{
+                for(PageId pid : pids) {
+                    Date currDate=id2date.get(pid);
+                    if(currDate.compareTo(evictDate)<0)
+                    {
+                        evictDate=currDate;
+                        evictPgId=pid;
+                    }
+                }
+                break;
+            }
+            case 2:{
+                evictDate=new Date(0);//初始化为最早的时间
+                for(PageId pid : pids) {
+                    Date currDate=id2date.get(pid);
+                    if(currDate.compareTo(evictDate)>0)
+                    {
+                        evictDate=currDate;
+                        evictPgId=pid;
+                    }
+                }
+                break;
+            }
+            case 3:{
+                //在id2pg中随机取一个
+                Random rand = new Random();
+                int pos=rand.nextInt(pids.size()),i=0;
+                for(PageId pid:pids){
+                    if(i==pos)
+                        evictPgId=pid;
+                    i++;
+                }
+                break;
+            }
+            default:throw new IllegalArgumentException();
+        }
 
+        Page target=id2pg.get(evictPgId);
+        if(target.isDirty()!=null)//如果是dirty page，需要flush
+        {
+            try{
+                flushPage(evictPgId);
+            } catch (IOException e){
+                e.printStackTrace();
+            }
+        }
+        id2date.remove(evictPgId);//evictPgId一定不为null
+        id2pg.remove(evictPgId);
+    }
+    /**
+     * Set eviction policy
+     * @param p policy number 1：LRU 2：MRU 3：随机策略
+     */
+    public void setPolicy(int p) throws IllegalArgumentException{
+        //some code goes here
+        // not necessary for lab1
+        if(p>3||p<0)
+            throw new IllegalArgumentException();
+        Policy=p;
+    }
 }
+
