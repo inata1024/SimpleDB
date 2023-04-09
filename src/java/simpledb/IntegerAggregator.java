@@ -16,9 +16,12 @@ public class IntegerAggregator implements Aggregator {
     private Type gbfieldtype;
     private int afield;
     private Op op;
-    private HashMap<Field,Integer> field2int;
+    private HashMap<Field,Integer> field2int;//gbfield到聚合结果的hashmap
     private HashMap<Field,Integer> avgCount;//记录avg中，每组的元素个数
     private HashMap<Field,Integer> avgSum;//记录avg的sum
+    private HashMap<Field,Integer> varRec;//用于方差计算，记录平方和
+    private HashMap<Field,Integer> varAvg;//用于方差计算，记录期望
+
     private TupleDesc td;
     /**
      * Aggregate constructor
@@ -118,6 +121,29 @@ public class IntegerAggregator implements Aggregator {
             }
             else
                 field2int.put(currField,1);
+        }
+        if(op==VAR)
+        {
+            if(field2int.containsKey(currField))
+            {
+                int size=avgCount.get(currField)+1;
+                avgCount.put(currField,size);//更新当前group元素个数
+                int pre=avgSum.get(currField);
+                avgSum.put(currField,pre+curr);//更新当前组内sum
+                varAvg.put(currField,avgSum.get(currField)/avgCount.get(currField));//更新当前期望
+                pre=varRec.get(currField);//之前的平方和
+                varRec.put(currField,pre+(curr-varAvg.get(currField))^2);//更新平方和
+                field2int.put(currField,varRec.get(currField)/size);
+            }
+            else
+            {
+                avgCount.put(currField, 1);
+                avgSum.put(currField, curr);
+                varRec.put(currField,0);//只有一个数时平方和为0
+                varAvg.put(currField,curr);//期望为curr
+                field2int.put(currField, 0);//方差为0
+            }
+
         }
     }
 

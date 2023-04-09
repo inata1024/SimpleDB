@@ -15,7 +15,7 @@ public interface Aggregator extends Serializable {
      * to implement them until then.
      * */
     public enum Op implements Serializable {
-        MIN, MAX, SUM, AVG, COUNT,
+        MIN, MAX, SUM, AVG, COUNT, VAR,
         /**
          * SUM_COUNT: compute sum and count simultaneously, will be
          * needed to compute distributed avg in lab7.
@@ -59,6 +59,8 @@ public interface Aggregator extends Serializable {
     			return "sum_count";
         	if (this==AVG)
         		return "avg";
+            if (this==VAR)
+                return "var";
         	if (this==COUNT)
         		return "count";
         	if (this==SC_AVG)
