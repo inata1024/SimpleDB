@@ -195,7 +195,41 @@ public class BTreeFile implements DbFile {
 			Field f) 
 					throws DbException, TransactionAbortedException {
 		// some code goes here
-        return null;
+		if(f==null)//先处理null情况,无需递归
+		{
+			BTreePageId currId=pid;
+			while(currId.pgcateg()!=BTreePageId.LEAF)//当前页不为leaf时
+			{
+				BTreeInternalPage pg=(BTreeInternalPage) getPage(tid,dirtypages,pid,Permissions.READ_ONLY);
+				Iterator<BTreeEntry> it=pg.iterator();
+				BTreeEntry et=it.next();
+				currId=et.getLeftChild();//取出当前页最左边的child
+			}
+			BTreeLeafPage pg=(BTreeLeafPage) getPage(tid,dirtypages,currId,perm);//取出leafpage，permissons与参数相同
+			return pg;
+
+		}
+		if(pid.pgcateg() == BTreePageId.LEAF)//叶节点为递归基
+		{
+			BTreeLeafPage pg=(BTreeLeafPage) getPage(tid,dirtypages,pid,perm);//取出leafpage，permissons与参数相同
+			return pg;
+		}
+		BTreeInternalPage pg=(BTreeInternalPage) getPage(tid,dirtypages,pid,Permissions.READ_ONLY);
+		Iterator<BTreeEntry> it=pg.iterator();
+		BTreePageId childPgId=null;//接下来搜索的子页id
+		BTreeEntry et=null;
+		while(it.hasNext())
+		{
+			et=it.next();
+			if(f.compare(Op.LESS_THAN,et.getKey()))//key比上一个大，下一个小，找到childpage
+			{
+				childPgId=et.getLeftChild();
+				break;
+			}
+		}
+		if(childPgId==null)//如果while没有找到，说明是最后一个entry的右孩子
+			childPgId=et.getRightChild();
+		return findLeafPage(tid,dirtypages,childPgId,perm,f);//递归
 	}
 	
 	/**

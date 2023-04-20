@@ -47,6 +47,8 @@ public class IntegerAggregator implements Aggregator {
         field2int=new HashMap<>();
         avgCount=new HashMap<>();
         avgSum=new HashMap<>();
+        varRec=new HashMap<>();
+        varAvg=new HashMap<>();
         td = gbfield != NO_GROUPING?
                 new TupleDesc(new Type[]{gbfieldtype,INT_TYPE}):
                 new TupleDesc(new Type[]{INT_TYPE});
@@ -122,28 +124,29 @@ public class IntegerAggregator implements Aggregator {
             else
                 field2int.put(currField,1);
         }
-        if(op==VAR)
+        if(op==VAR)//公式 EX^2-(EX)^2
         {
             if(field2int.containsKey(currField))
             {
                 int size=avgCount.get(currField)+1;
                 avgCount.put(currField,size);//更新当前group元素个数
-                int pre=avgSum.get(currField);
+                int pre=avgSum.get(currField);//之前的组内sum
                 avgSum.put(currField,pre+curr);//更新当前组内sum
-                varAvg.put(currField,avgSum.get(currField)/avgCount.get(currField));//更新当前期望
+                varAvg.put(currField,avgSum.get(currField)/size);//更新当前期望
                 pre=varRec.get(currField);//之前的平方和
-                varRec.put(currField,pre+(curr-varAvg.get(currField))^2);//更新平方和
-                field2int.put(currField,varRec.get(currField)/size);
+                varRec.put(currField,pre+curr*curr);//更新平方和
+                int EX=varAvg.get(currField);
+                int EXX=varRec.get(currField)/size;
+                field2int.put(currField,EXX-EX*EX);
             }
             else
             {
                 avgCount.put(currField, 1);
                 avgSum.put(currField, curr);
-                varRec.put(currField,0);//只有一个数时平方和为0
+                varRec.put(currField,curr*curr);
                 varAvg.put(currField,curr);//期望为curr
                 field2int.put(currField, 0);//方差为0
             }
-
         }
     }
 

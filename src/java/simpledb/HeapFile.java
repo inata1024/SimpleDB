@@ -135,16 +135,17 @@ public class HeapFile implements DbFile {
            HeapPageId newPID=new HeapPageId(getId(),newPos);
            HeapPage newPg=new HeapPage(newPID,HeapPage.createEmptyPageData());
            //思路1：先将空白页写入文件，再通过bp获得page，对page进行插入
-           /*writePage(newPg);//将新页写入文件
+           //因为此时磁盘与内存不用一样，所以这样比较好
+           writePage(newPg);//将新页写入文件
            newPg=(HeapPage) bp.getPage(tid,newPID,Permissions.READ_WRITE);//从bp中获取文件
            newPg.insertTuple(t);
            newPg.markDirty(true,tid);
-           ans.add(newPg);*/
+           ans.add(newPg);
            //思路2：对新page插入完毕后，再写入文件
-           newPg.insertTuple(t);
+           /*newPg.insertTuple(t);
            newPg.markDirty(true,tid);
            ans.add(newPg);
-           writePage(newPg);
+           writePage(newPg);*/
         }
         return ans;
     }

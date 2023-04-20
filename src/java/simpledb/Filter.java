@@ -44,6 +44,7 @@ public class Filter extends Operator {
         child.open();
         super.open();
 
+
     }
 
     public void close() {

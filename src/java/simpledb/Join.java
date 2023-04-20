@@ -122,7 +122,7 @@ public class Join extends Operator {
             {
                 Tuple t2=child2.next();
                 if(p.filter(child1_curr_tuple,t2))
-                    return Tuple.canconcatenate(getTupleDesc(),child1_curr_tuple,t2);
+                    return Tuple.concatenate(getTupleDesc(),child1_curr_tuple,t2);
             }
             else
             {

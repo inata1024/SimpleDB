@@ -135,7 +135,7 @@ public class Tuple implements Serializable {
         TD=td;
     }
 
-    public static Tuple canconcatenate(TupleDesc td,Tuple t1,Tuple t2)
+    public static Tuple concatenate(TupleDesc td,Tuple t1,Tuple t2)
     {
         Tuple ans=new Tuple(td);
         Iterator<Field> it=t1.fields();
