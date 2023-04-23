@@ -187,7 +187,7 @@ public class BufferPool {
      *
      * @param tid the transaction deleting the tuple.
      * @param t the tuple to delete
-     */
+  qq       */
     public  void deleteTuple(TransactionId tid, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here

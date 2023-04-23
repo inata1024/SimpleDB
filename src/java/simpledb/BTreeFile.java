@@ -200,7 +200,7 @@ public class BTreeFile implements DbFile {
 			BTreePageId currId=pid;
 			while(currId.pgcateg()!=BTreePageId.LEAF)//当前页不为leaf时
 			{
-				BTreeInternalPage pg=(BTreeInternalPage) getPage(tid,dirtypages,pid,Permissions.READ_ONLY);
+				BTreeInternalPage pg=(BTreeInternalPage) getPage(tid,dirtypages,currId,Permissions.READ_ONLY);
 				Iterator<BTreeEntry> it=pg.iterator();
 				BTreeEntry et=it.next();
 				currId=et.getLeftChild();//取出当前页最左边的child
@@ -221,7 +221,9 @@ public class BTreeFile implements DbFile {
 		while(it.hasNext())
 		{
 			et=it.next();
-			if(f.compare(Op.LESS_THAN,et.getKey()))//key比上一个大，下一个小，找到childpage
+			//key比上一个大，小于等于下一个，找到childpage
+			//必须用小于等于才能找到满足条件最左边的
+			if(f.compare(Op.LESS_THAN_OR_EQ,et.getKey()))
 			{
 				childPgId=et.getLeftChild();
 				break;
@@ -278,11 +280,57 @@ public class BTreeFile implements DbFile {
         // Split the leaf page by adding a new page on the right of the existing
 		// page and moving half of the tuples to the new page.  Copy the middle key up
 		// into the parent page, and recursively split the parent as needed to accommodate
-		// the new entry.  getParentWithEmtpySlots() will be useful here.  Don't forget to update
+		// the new entry. getParentWithEmtpySlots() will be useful here.  Don't forget to update
 		// the sibling pointers of all the affected leaf pages.  Return the page into which a 
 		// tuple with the given key field should be inserted.
-        return null;
-		
+
+		//创建一个新leafPage
+		BTreeLeafPage newPage=(BTreeLeafPage)getEmptyPage(tid,dirtypages,BTreePageId.LEAF);
+		//使用迭代器将page的一半数据转移到newPage
+		Iterator<Tuple> it=new BTreeLeafPageReverseIterator(page);
+		int numTuples=page.getNumTuples();
+		//因为只取一半，所以没有判断hasNext
+		Tuple temp=null;//由于leafPage中Tuple数量不会太少，temp之后一定非空
+		for(int i=0;i<numTuples/2;i++)
+		{
+			temp=it.next();
+			//从原来page中删去
+			page.deleteTuple(temp);
+			//加入到新的page中，leafPage的insert是保序的
+			newPage.insertTuple(temp);
+		}
+		//找到可用的parent
+		BTreeInternalPage parPage=(BTreeInternalPage) getParentWithEmptySlots(tid,dirtypages,page.getParentId(),field);
+		//更新parent指针
+		page.setParentId(parPage.getId());
+		newPage.setParentId(parPage.getId());
+		//更新sibling指针
+		//获取page右边的page
+		if(page.getRightSiblingId()!=null)
+		{
+			BTreeLeafPage rightPage=(BTreeLeafPage) getPage(tid,dirtypages,page.getRightSiblingId(),Permissions.READ_WRITE);
+			rightPage.setLeftSiblingId(newPage.getId());
+			newPage.setRightSiblingId(rightPage.getId());
+		}
+		newPage.setLeftSiblingId(page.getId());
+		page.setRightSiblingId(newPage.getId());
+		//此时temp为newPage的第一个tuple，把它的key copy上去
+		//根据middle key创建新entry，主要是通过keyField找到temp中作为索引的Field
+		Field kf=temp.getField(keyField);
+		BTreeEntry et=new BTreeEntry(kf,page.getId(),newPage.getId());
+		//将entry插入parent，函数中处理了child指针问题
+		parPage.insertEntry(et);
+		//比较field参数与newPage的第一个field，找出返回的page
+		if(field.compare(Op.GREATER_THAN_OR_EQ,kf))
+			return newPage;
+		else
+			return page;
+
+		//解决dirty page问题,dirtypages参数是引用传递，函数内改动有效
+		//按理说，如果该函数调用前page就在dirtypages里面，那么这一步就不必要，因为对更改page会体现在dirtypages里
+		//将newPage放入也无必要，因为在一开始取得newPage时，它就在dirtypages里面了
+		//dirtypages.put(page.getId(), page);
+		//dirtypages.put(newPage.getId(), newPage);
 	}
 	
 	/**
@@ -319,7 +367,44 @@ public class BTreeFile implements DbFile {
 		// the parent pointers of all the children moving to the new page.  updateParentPointers()
 		// will be useful here.  Return the page into which an entry with the given key field
 		// should be inserted.
-		return null;
+		//创建一个新internalPage
+		BTreeInternalPage newPage=(BTreeInternalPage) getEmptyPage(tid,dirtypages,BTreePageId.INTERNAL);
+		//使用迭代器将page的一半数据转移到newPage
+		Iterator<BTreeEntry> it=new BTreeInternalPageReverseIterator(page);
+		int numEntries=page.getNumEntries();
+		//因为只取一半，所以没有判断hasNext
+		BTreeEntry temp=it.next();
+		for(int i=0;i<numEntries/2;i++)
+		{
+			//从原来page中删去
+			page.deleteKeyAndRightChild(temp);
+
+			//加入到新的page中，leafPage的insert是保序的
+			newPage.insertEntry(temp);
+			temp=it.next();
+		}
+		//更新newPage的所有child的parent指针
+		updateParentPointers(tid,dirtypages,newPage);
+		//找到可用的parent
+		BTreeInternalPage parPage=(BTreeInternalPage) getParentWithEmptySlots(tid,dirtypages,page.getParentId(),field);
+		//此时的temp是中间那个entry，从page中删除但不插入newPage
+		page.deleteKeyAndRightChild(temp);
+		//更新middle entry的child
+		temp.setLeftChild(page.getId());
+		temp.setRightChild(newPage.getId());
+		//更新page、newPage的parent
+		page.setParentId(parPage.getId());
+		newPage.setParentId(parPage.getId());
+		//将middle entry插入parent中
+		parPage.insertEntry(temp);
+
+		//选出返回的page
+		Field kf=temp.getKey();
+		if(field.compare(Op.GREATER_THAN_OR_EQ,kf))
+			return newPage;
+		else
+			return page;
+
 	}
 	
 	/**
