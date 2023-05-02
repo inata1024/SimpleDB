@@ -68,6 +68,7 @@ public interface DbFile {
      */
     public DbFileIterator iterator(TransactionId tid);
 
+
     /**
      * Returns a unique ID used to identify this DbFile in the Catalog. This id
      * can be used to look up the table via {@link Catalog#getDatabaseFile} and

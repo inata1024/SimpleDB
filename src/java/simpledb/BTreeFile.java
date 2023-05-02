@@ -233,6 +233,52 @@ public class BTreeFile implements DbFile {
 			childPgId=et.getRightChild();
 		return findLeafPage(tid,dirtypages,childPgId,perm,f);//递归
 	}
+
+	/**
+	 * findLeafPage的对称版
+	 */
+	private BTreeLeafPage findLeafPageReverse(TransactionId tid, HashMap<PageId, Page> dirtypages,
+											  BTreePageId pid, Permissions perm, Field f)
+			throws DbException, TransactionAbortedException {
+		// some code goes here
+		if(f==null)//先处理null情况,无需递归
+		{
+			BTreePageId currId=pid;
+			while(currId.pgcateg()!=BTreePageId.LEAF)//当前页不为leaf时
+			{
+				BTreeInternalPage pg=(BTreeInternalPage) getPage(tid,dirtypages,currId,Permissions.READ_ONLY);
+				Iterator<BTreeEntry> it=pg.reverseIterator();
+				BTreeEntry et=it.next();
+				currId=et.getRightChild();//取出当前页最左边的child
+			}
+			BTreeLeafPage pg=(BTreeLeafPage) getPage(tid,dirtypages,currId,perm);//取出leafpage，permissons与参数相同
+			return pg;
+
+		}
+		if(pid.pgcateg() == BTreePageId.LEAF)//叶节点为递归基
+		{
+			BTreeLeafPage pg=(BTreeLeafPage) getPage(tid,dirtypages,pid,perm);//取出leafpage，permissons与参数相同
+			return pg;
+		}
+		BTreeInternalPage pg=(BTreeInternalPage) getPage(tid,dirtypages,pid,Permissions.READ_ONLY);
+		Iterator<BTreeEntry> it=pg.reverseIterator();
+		BTreePageId childPgId=null;//接下来搜索的子页id
+		BTreeEntry et=null;
+		while(it.hasNext())
+		{
+			et=it.next();
+			//key比上一个小，大于等于下一个，找到childpage
+			//必须用大于等于才能找到满足条件最右边的
+			if(f.compare(Op.GREATER_THAN_OR_EQ,et.getKey()))
+			{
+				childPgId=et.getRightChild();
+				break;
+			}
+		}
+		if(childPgId==null)//如果while没有找到，说明是最后一个entry的右孩子
+			childPgId=et.getLeftChild();
+		return findLeafPageReverse(tid,dirtypages,childPgId,perm,f);//递归
+	}
 	
 	/**
 	 * Convenience method to find a leaf page when there is no dirtypages HashMap.
@@ -250,6 +296,15 @@ public class BTreeFile implements DbFile {
 			Field f) 
 					throws DbException, TransactionAbortedException {
 		return findLeafPage(tid, new HashMap<PageId, Page>(), pid, perm, f);
+	}
+
+	/**
+	 *
+	 */
+	BTreeLeafPage findLeafPageReverse(TransactionId tid, BTreePageId pid, Permissions perm,
+							   Field f)
+			throws DbException, TransactionAbortedException {
+		return findLeafPageReverse(tid, new HashMap<PageId, Page>(), pid, perm, f);
 	}
 
 	/**
@@ -700,6 +755,39 @@ public class BTreeFile implements DbFile {
         // Move some of the tuples from the sibling to the page so
 		// that the tuples are evenly distributed. Be sure to update
 		// the corresponding parent entry.
+
+		//计算两page间tuple数量差 理论上大于1
+		int num=sibling.getNumTuples()-page.getNumTuples();
+		//为达到evenly distributed,需要转移的tuple数即为num/2
+		num= num/2;
+		Tuple t=null;
+		//如果是右兄弟
+		if(isRightSibling)
+		{
+			Iterator<Tuple> sib_it=sibling.iterator();
+			for(int i=0;i<num;i++)
+			{
+				t=sib_it.next();
+				sibling.deleteTuple(t);
+				page.insertTuple(t);
+			}
+			t=sib_it.next();
+			entry.setKey(t.getField(keyField));//将right sibling的第一个key作为entry的key
+			parent.updateEntry(entry);//更新parent中的entry
+			return;
+		}
+		//左兄弟的情况
+		Iterator<Tuple> sib_it=sibling.reverseIterator();
+		for(int i=0;i<num;i++)
+		{
+			t=sib_it.next();
+			sibling.deleteTuple(t);
+			page.insertTuple(t);
+		}
+		entry.setKey(t.getField(keyField));//将right sibling的第一个key作为entry的key
+		parent.updateEntry(entry);//更新parent中的entry
+		return;
+
 	}
 
 	/**
@@ -780,6 +868,43 @@ public class BTreeFile implements DbFile {
 		// that the entries are evenly distributed. Be sure to update
 		// the corresponding parent entry. Be sure to update the parent
 		// pointers of all children in the entries that were moved.
+
+		//计算两page间tuple数量差 理论上大于1
+		int num=leftSibling.getNumEntries()-page.getNumEntries();
+		//为达到evenly distributed,需要转移的tuple数即为num/2
+		num= num/2;
+		BTreeEntry e=null;
+		Iterator<BTreeEntry> sib_it=leftSibling.reverseIterator();
+		Iterator<BTreeEntry> it=page.iterator();
+		//获取page最左边的孩子，作为之后e的右孩子
+		e=it.next();
+		BTreePageId rc=e.getLeftChild();
+		for(int i=0;i<num;i++)
+		{
+			e=sib_it.next();
+			//获取左兄弟末尾entry的右孩子，作为之后e的左孩子
+			BTreePageId lc=e.getRightChild();
+			//删去末尾entry
+			leftSibling.deleteKeyAndRightChild(e);
+			//当前parent的key
+			Field keyf=parentEntry.getKey();
+			//更新parent的key
+			parentEntry.setKey(e.getKey());
+			//更新e的key
+			e.setKey(keyf);
+			//更新e的孩子信息
+			e.setRightChild(rc);
+			e.setLeftChild(lc);
+			//下一轮循环的rc即为当前的lc
+			rc=lc;
+			//将e插入page
+			page.insertEntry(e);
+		}
+		//更新parent对应位置的entry信息
+		//疑惑：既然是引用传递，为什么改了parentEntry还要updateEntry?
+		parent.updateEntry(parentEntry);
+		updateParentPointers(tid,dirtypages,page);
+
 	}
 	
 	/**
@@ -808,6 +933,42 @@ public class BTreeFile implements DbFile {
 		// that the entries are evenly distributed. Be sure to update
 		// the corresponding parent entry. Be sure to update the parent
 		// pointers of all children in the entries that were moved.
+
+		//计算两page间tuple数量差 理论上大于1
+		int num=rightSibling.getNumEntries()-page.getNumEntries();
+		//为达到evenly distributed,需要转移的tuple数即为num/2
+		num= num/2;
+		BTreeEntry e=null;
+		Iterator<BTreeEntry> sib_it=rightSibling.iterator();
+		Iterator<BTreeEntry> it=page.reverseIterator();
+		//获取page最右边的孩子，作为之后e的左孩子
+		e=it.next();
+		BTreePageId lc=e.getRightChild();
+		for(int i=0;i<num;i++)
+		{
+			e=sib_it.next();
+			//获取右兄弟首个entry的左孩子，作为之后e的右孩子
+			BTreePageId rc=e.getLeftChild();
+			//删去首个entry
+			rightSibling.deleteKeyAndLeftChild(e);
+			//当前parent的key
+			Field keyf=parentEntry.getKey();
+			//更新parent的key
+			parentEntry.setKey(e.getKey());
+			//更新e的key
+			e.setKey(keyf);
+			//更新e的孩子信息
+			e.setRightChild(rc);
+			e.setLeftChild(lc);
+			//下一轮循环的lc即为当前的rc
+			lc=rc;
+			//将e插入page
+			page.insertEntry(e);
+		}
+		//更新parent对应位置的entry信息
+		//疑惑：既然是引用传递，为什么改了parentEntry还要updateEntry?
+		parent.updateEntry(parentEntry);
+		updateParentPointers(tid,dirtypages,page);
 	}
 	
 	/**
@@ -838,6 +999,29 @@ public class BTreeFile implements DbFile {
 		// the sibling pointers, and make the right page available for reuse.
 		// Delete the entry in the parent corresponding to the two pages that are merging -
 		// deleteParentEntry() will be useful here
+
+		Iterator<Tuple> it= rightPage.iterator();
+		//Move all the tuples from the right page to the left page
+		while(it.hasNext())
+		{
+
+			Tuple tuple = it.next();
+			rightPage.deleteTuple(tuple);//先删除后插入,疑惑：是否需要删除？
+			leftPage.insertTuple(tuple);
+		}
+		//更新sibling pointer
+		BTreePageId rightSibId=rightPage.getRightSiblingId();
+		leftPage.setRightSiblingId(rightSibId);
+		//若右兄弟的右兄弟非空，则需要更新其左兄弟
+		if(rightSibId!=null)
+		{
+			//取出右兄弟的右兄弟
+			BTreeLeafPage rightPg=(BTreeLeafPage) getPage(tid,dirtypages,rightSibId,Permissions.READ_WRITE);
+			rightPg.setLeftSiblingId(leftPage.getId());
+		}
+		setEmptyPage(tid,dirtypages,rightPage.getId().getPageNumber());
+		deleteParentEntry(tid,dirtypages,leftPage,parent,parentEntry);
+
 	}
 
 	/**
@@ -871,6 +1055,23 @@ public class BTreeFile implements DbFile {
 		// and make the right page available for reuse
 		// Delete the entry in the parent corresponding to the two pages that are merging -
 		// deleteParentEntry() will be useful here
+		Iterator<BTreeEntry> r_it=rightPage.iterator();
+		//先插入parentEntry
+		BTreeEntry e=new BTreeEntry(parentEntry.getKey(),
+				leftPage.reverseIterator().next().getRightChild(),
+				rightPage.iterator().next().getLeftChild());
+		leftPage.insertEntry(e);
+		//Move all the entries from the right page to the left page
+		while(r_it.hasNext())
+		{
+			BTreeEntry entry = r_it.next();
+			rightPage.deleteKeyAndLeftChild(entry);
+			leftPage.insertEntry(entry);
+		}
+		//疑惑:header page的markSlotUsed与internalPage的有什么区别
+		setEmptyPage(tid, dirtypages, rightPage.getId().getPageNumber());
+		updateParentPointers(tid, dirtypages, leftPage);
+		deleteParentEntry(tid, dirtypages, leftPage, parent, parentEntry);
 	}
 	
 	/**
@@ -1177,6 +1378,15 @@ public class BTreeFile implements DbFile {
 	}
 
 	/**
+	 * 返回BTreeReverseSearchIterator
+	 */
+	public DbFileIterator indexReverseIterator(TransactionId tid, IndexPredicate ipred) {
+		return new BTreeReverseSearchIterator(this, tid, ipred);
+	}
+
+
+
+	/**
 	 * Get an iterator for all tuples in this B+ tree file in sorted order. This method 
 	 * will acquire a read lock on the affected pages of the file, and may block until 
 	 * the lock can be acquired.
@@ -1186,6 +1396,13 @@ public class BTreeFile implements DbFile {
 	 */
 	public DbFileIterator iterator(TransactionId tid) {
 		return new BTreeFileIterator(this, tid);
+	}
+
+	/**
+	 * 返回BTreeFileReverseIterator
+	 */
+	public DbFileIterator reverse_iterator(TransactionId tid) {
+		return new BTreeFileReverseIterator(this, tid);
 	}
 
 }
@@ -1351,6 +1568,193 @@ class BTreeSearchIterator extends AbstractDbFileIterator {
 				curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
 						nextp, Permissions.READ_ONLY);
 				it = curp.iterator();
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * rewind this iterator back to the beginning of the tuples
+	 */
+	public void rewind() throws DbException, TransactionAbortedException {
+		close();
+		open();
+	}
+
+	/**
+	 * close the iterator
+	 */
+	public void close() {
+		super.close();
+		it = null;
+	}
+}
+
+
+/**
+ * BTreeFileIterator逆向版
+ */
+class BTreeFileReverseIterator extends AbstractDbFileIterator {
+
+	Iterator<Tuple> it = null;
+	BTreeLeafPage curp = null;
+
+	TransactionId tid;
+	BTreeFile f;
+
+	/**
+	 * Constructor for this iterator
+	 * @param f - the BTreeFile containing the tuples
+	 * @param tid - the transaction id
+	 */
+	public BTreeFileReverseIterator(BTreeFile f, TransactionId tid) {
+		this.f = f;
+		this.tid = tid;
+	}
+
+	/**
+	 * Open this iterator by getting an iterator on the first leaf page
+	 */
+	public void open() throws DbException, TransactionAbortedException {
+		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
+				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		BTreePageId root = rootPtr.getRootId();
+		curp = f.findLeafPageReverse(tid, root, Permissions.READ_ONLY, null);
+		it = curp.reverseIterator();
+	}
+
+	/**
+	 * Read the next tuple either from the current page if it has more tuples or
+	 * from the next page by following the left sibling pointer.
+	 *
+	 * @return the next tuple, or null if none exists
+	 */
+	@Override
+	protected Tuple readNext() throws TransactionAbortedException, DbException {
+		if (it != null && !it.hasNext())
+			it = null;
+
+		while (it == null && curp != null) {
+			BTreePageId nextp = curp.getLeftSiblingId();
+			if(nextp == null) {
+				curp = null;
+			}
+			else {
+				curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
+						nextp, Permissions.READ_ONLY);
+				it = curp.reverseIterator();
+				if (!it.hasNext())
+					it = null;
+			}
+		}
+
+		if (it == null)
+			return null;
+		return it.next();
+	}
+
+	/**
+	 * rewind this iterator back to the beginning of the tuples
+	 */
+	public void rewind() throws DbException, TransactionAbortedException {
+		close();
+		open();
+	}
+
+	/**
+	 * close the iterator
+	 */
+	public void close() {
+		super.close();
+		it = null;
+		curp = null;
+	}
+}
+
+
+
+
+/**
+ * BTreeSearchIterator对称版
+ */
+class BTreeReverseSearchIterator extends AbstractDbFileIterator {
+
+	Iterator<Tuple> it = null;
+	BTreeLeafPage curp = null;
+
+	TransactionId tid;
+	BTreeFile f;
+	IndexPredicate ipred;
+
+	/**
+	 * Constructor for this iterator
+	 * @param f - the BTreeFile containing the tuples
+	 * @param tid - the transaction id
+	 * @param ipred - the predicate to filter on
+	 */
+	public BTreeReverseSearchIterator(BTreeFile f, TransactionId tid, IndexPredicate ipred) {
+		this.f = f;
+		this.tid = tid;
+		this.ipred = ipred;
+	}
+
+	/**
+	 * Open this iterator by getting an iterator on the first leaf page applicable
+	 * for the given predicate operation
+	 */
+	public void open() throws DbException, TransactionAbortedException {
+		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
+				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
+		BTreePageId root = rootPtr.getRootId();
+		if(ipred.getOp() == Op.EQUALS || ipred.getOp() == Op.LESS_THAN
+				|| ipred.getOp() == Op.LESS_THAN_OR_EQ) {
+			curp = f.findLeafPageReverse(tid, root, Permissions.READ_ONLY, ipred.getField());
+		}
+		else {
+			curp = f.findLeafPageReverse(tid, root, Permissions.READ_ONLY, null);
+		}
+		it = curp.reverseIterator();
+	}
+
+	/**
+	 * Read the next tuple either from the current page if it has more tuples matching
+	 * the predicate or from the next page by following the left sibling pointer.
+	 *
+	 * @return the next tuple matching the predicate, or null if none exists
+	 */
+	@Override
+	protected Tuple readNext() throws TransactionAbortedException, DbException,
+			NoSuchElementException {
+		while (it != null) {
+
+			while (it.hasNext()) {
+				Tuple t = it.next();
+				if (t.getField(f.keyField()).compare(ipred.getOp(), ipred.getField())) {
+					return t;
+				}
+				else if(ipred.getOp() == Op.GREATER_THAN || ipred.getOp() == Op.GREATER_THAN_OR_EQ) {
+					// if the predicate was not satisfied and the operation is greater than, we have
+					// hit the end
+					return null;
+				}
+				else if(ipred.getOp() == Op.EQUALS &&
+						t.getField(f.keyField()).compare(Op.LESS_THAN, ipred.getField())) {
+					// if the tuple is now less than the field passed in and the operation
+					// is equals, we have reached the end
+					return null;
+				}
+			}
+
+			BTreePageId nextp = curp.getLeftSiblingId();
+			// if there are no more pages to the left, end the iteration
+			if(nextp == null) {
+				return null;
+			}
+			else {
+				curp = (BTreeLeafPage) Database.getBufferPool().getPage(tid,
+						nextp, Permissions.READ_ONLY);
+				it = curp.reverseIterator();
 			}
 		}
 
