@@ -192,8 +192,8 @@ public class BTreeFile implements DbFile {
 	 * 
 	 */
 	private BTreeLeafPage findLeafPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid, Permissions perm,
-			Field f) 
-					throws DbException, TransactionAbortedException {
+			Field f)
+			throws DbException, TransactionAbortedException, InterruptedException {
 		// some code goes here
 		if(f==null)//先处理null情况,无需递归
 		{
@@ -239,7 +239,7 @@ public class BTreeFile implements DbFile {
 	 */
 	private BTreeLeafPage findLeafPageReverse(TransactionId tid, HashMap<PageId, Page> dirtypages,
 											  BTreePageId pid, Permissions perm, Field f)
-			throws DbException, TransactionAbortedException {
+			throws DbException, TransactionAbortedException, InterruptedException {
 		// some code goes here
 		if(f==null)//先处理null情况,无需递归
 		{
@@ -293,8 +293,8 @@ public class BTreeFile implements DbFile {
 	 * 
 	 */
 	BTreeLeafPage findLeafPage(TransactionId tid, BTreePageId pid, Permissions perm,
-			Field f) 
-					throws DbException, TransactionAbortedException {
+			Field f)
+			throws DbException, TransactionAbortedException, InterruptedException {
 		return findLeafPage(tid, new HashMap<PageId, Page>(), pid, perm, f);
 	}
 
@@ -303,7 +303,7 @@ public class BTreeFile implements DbFile {
 	 */
 	BTreeLeafPage findLeafPageReverse(TransactionId tid, BTreePageId pid, Permissions perm,
 							   Field f)
-			throws DbException, TransactionAbortedException {
+			throws DbException, TransactionAbortedException, InterruptedException {
 		return findLeafPageReverse(tid, new HashMap<PageId, Page>(), pid, perm, f);
 	}
 
@@ -328,8 +328,8 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	protected BTreeLeafPage splitLeafPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreeLeafPage page, Field field) 
-			throws DbException, IOException, TransactionAbortedException {
+	protected BTreeLeafPage splitLeafPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreeLeafPage page, Field field)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		// some code goes here
         //
         // Split the leaf page by adding a new page on the right of the existing
@@ -411,8 +411,8 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	protected BTreeInternalPage splitInternalPage(TransactionId tid, HashMap<PageId, Page> dirtypages, 
-			BTreeInternalPage page, Field field) 
-					throws DbException, IOException, TransactionAbortedException {
+			BTreeInternalPage page, Field field)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		// some code goes here
         //
         // Split the internal page by adding a new page on the right of the existing
@@ -480,7 +480,7 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	private BTreeInternalPage getParentWithEmptySlots(TransactionId tid, HashMap<PageId, Page> dirtypages, 
-			BTreePageId parentId, Field field) throws DbException, IOException, TransactionAbortedException {
+			BTreePageId parentId, Field field) throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		
 		BTreeInternalPage parent = null;
 		
@@ -490,7 +490,8 @@ public class BTreeFile implements DbFile {
 			parent = (BTreeInternalPage) getEmptyPage(tid, dirtypages, BTreePageId.INTERNAL);
 
 			// update the root pointer
-			BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) getPage(tid, dirtypages,
+			BTreeRootPtrPage rootPtr = (BTreeRootPtrPage)
+					getPage(tid, dirtypages,
 					BTreeRootPtrPage.getId(tableid), Permissions.READ_WRITE);
 			BTreePageId prevRootId = rootPtr.getRootId(); //save prev id before overwriting.
 			rootPtr.setRootId(parent.getId());
@@ -525,8 +526,8 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	private void updateParentPointer(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid, BTreePageId child) 
-			throws DbException, IOException, TransactionAbortedException {
+	private void updateParentPointer(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid, BTreePageId child)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 
 		BTreePage p = (BTreePage) getPage(tid, dirtypages, child, Permissions.READ_ONLY);
 
@@ -550,8 +551,8 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	private void updateParentPointers(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreeInternalPage page) 
-			throws DbException, IOException, TransactionAbortedException{
+	private void updateParentPointers(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreeInternalPage page)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		Iterator<BTreeEntry> it = page.iterator();
 		BTreePageId pid = page.getId();
 		BTreeEntry e = null;
@@ -584,7 +585,7 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	Page getPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid, Permissions perm)
-			throws DbException, TransactionAbortedException {
+			throws DbException, TransactionAbortedException, InterruptedException {
 		if(dirtypages.containsKey(pid)) {
 			return dirtypages.get(pid);
 		}
@@ -608,7 +609,7 @@ public class BTreeFile implements DbFile {
 	 * @see #splitLeafPage(TransactionId, HashMap, BTreeLeafPage, Field)
 	 */
 	public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
-			throws DbException, IOException, TransactionAbortedException {
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		HashMap<PageId, Page> dirtypages = new HashMap<PageId, Page>();
 
 		// get a read lock on the root pointer page and use it to locate the root page
@@ -651,8 +652,8 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	private void handleMinOccupancyPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePage page) 
-			throws DbException, IOException, TransactionAbortedException {
+	private void handleMinOccupancyPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePage page)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		BTreePageId parentId = page.getParentId();
 		BTreeEntry leftEntry = null;
 		BTreeEntry rightEntry = null;
@@ -703,8 +704,8 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	private void handleMinOccupancyLeafPage(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreeLeafPage page, 
-			BTreeInternalPage parent, BTreeEntry leftEntry, BTreeEntry rightEntry) 
-			throws DbException, IOException, TransactionAbortedException {
+			BTreeInternalPage parent, BTreeEntry leftEntry, BTreeEntry rightEntry)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		BTreePageId leftSiblingId = null;
 		BTreePageId rightSiblingId = null;
 		if(leftEntry != null) leftSiblingId = leftEntry.getLeftChild();
@@ -810,8 +811,8 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	private void handleMinOccupancyInternalPage(TransactionId tid, HashMap<PageId, Page> dirtypages, 
-			BTreeInternalPage page, BTreeInternalPage parent, BTreeEntry leftEntry, BTreeEntry rightEntry) 
-					throws DbException, IOException, TransactionAbortedException {
+			BTreeInternalPage page, BTreeInternalPage parent, BTreeEntry leftEntry, BTreeEntry rightEntry)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		BTreePageId leftSiblingId = null;
 		BTreePageId rightSiblingId = null;
 		if(leftEntry != null) leftSiblingId = leftEntry.getLeftChild();
@@ -862,7 +863,7 @@ public class BTreeFile implements DbFile {
 	 */
 	protected void stealFromLeftInternalPage(TransactionId tid, HashMap<PageId, Page> dirtypages, 
 			BTreeInternalPage page, BTreeInternalPage leftSibling, BTreeInternalPage parent,
-			BTreeEntry parentEntry) throws DbException, IOException, TransactionAbortedException {
+			BTreeEntry parentEntry) throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		// some code goes here
         // Move some of the entries from the left sibling to the page so
 		// that the entries are evenly distributed. Be sure to update
@@ -927,7 +928,7 @@ public class BTreeFile implements DbFile {
 	 */
 	protected void stealFromRightInternalPage(TransactionId tid, HashMap<PageId, Page> dirtypages, 
 			BTreeInternalPage page, BTreeInternalPage rightSibling, BTreeInternalPage parent,
-			BTreeEntry parentEntry) throws DbException, IOException, TransactionAbortedException {
+			BTreeEntry parentEntry) throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		// some code goes here
         // Move some of the entries from the right sibling to the page so
 		// that the entries are evenly distributed. Be sure to update
@@ -990,8 +991,8 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	protected void mergeLeafPages(TransactionId tid, HashMap<PageId, Page> dirtypages, 
-			BTreeLeafPage leftPage, BTreeLeafPage rightPage, BTreeInternalPage parent, BTreeEntry parentEntry) 
-					throws DbException, IOException, TransactionAbortedException {
+			BTreeLeafPage leftPage, BTreeLeafPage rightPage, BTreeInternalPage parent, BTreeEntry parentEntry)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 
 		// some code goes here
         //
@@ -1016,7 +1017,8 @@ public class BTreeFile implements DbFile {
 		if(rightSibId!=null)
 		{
 			//取出右兄弟的右兄弟
-			BTreeLeafPage rightPg=(BTreeLeafPage) getPage(tid,dirtypages,rightSibId,Permissions.READ_WRITE);
+			BTreeLeafPage rightPg=(BTreeLeafPage)
+					getPage(tid,dirtypages,rightSibId,Permissions.READ_WRITE);
 			rightPg.setLeftSiblingId(leftPage.getId());
 		}
 		setEmptyPage(tid,dirtypages,rightPage.getId().getPageNumber());
@@ -1045,8 +1047,8 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	protected void mergeInternalPages(TransactionId tid, HashMap<PageId, Page> dirtypages, 
-			BTreeInternalPage leftPage, BTreeInternalPage rightPage, BTreeInternalPage parent, BTreeEntry parentEntry) 
-					throws DbException, IOException, TransactionAbortedException {
+			BTreeInternalPage leftPage, BTreeInternalPage rightPage, BTreeInternalPage parent, BTreeEntry parentEntry)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		
 		// some code goes here
         //
@@ -1070,6 +1072,9 @@ public class BTreeFile implements DbFile {
 		}
 		//疑惑:header page的markSlotUsed与internalPage的有什么区别
 		setEmptyPage(tid, dirtypages, rightPage.getId().getPageNumber());
+
+
+
 		updateParentPointers(tid, dirtypages, leftPage);
 		deleteParentEntry(tid, dirtypages, leftPage, parent, parentEntry);
 	}
@@ -1093,8 +1098,8 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	private void deleteParentEntry(TransactionId tid, HashMap<PageId, Page> dirtypages, 
-			BTreePage leftPage, BTreeInternalPage parent, BTreeEntry parentEntry) 
-					throws DbException, IOException, TransactionAbortedException {		
+			BTreePage leftPage, BTreeInternalPage parent, BTreeEntry parentEntry)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		
 		// delete the entry in the parent.  If
 		// the parent is below minimum occupancy, get some tuples from its siblings
@@ -1132,8 +1137,8 @@ public class BTreeFile implements DbFile {
 	 * many pages since parent pointers will need to be updated when an internal node merges.
 	 * @see #handleMinOccupancyPage(TransactionId, HashMap, BTreePage)
 	 */
-	public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) 
-			throws DbException, IOException, TransactionAbortedException {
+	public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		HashMap<PageId, Page> dirtypages = new HashMap<PageId, Page>();
 
 		BTreePageId pageId = new BTreePageId(tableid, t.getRecordId().getPageId().getPageNumber(),
@@ -1164,7 +1169,7 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	BTreeRootPtrPage getRootPtrPage(TransactionId tid, HashMap<PageId, Page> dirtypages) throws DbException, IOException, TransactionAbortedException {
+	BTreeRootPtrPage getRootPtrPage(TransactionId tid, HashMap<PageId, Page> dirtypages) throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		synchronized(this) {
 			if(f.length() == 0) {
 				// create the root pointer page and the root page
@@ -1194,8 +1199,8 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	protected int getEmptyPageNo(TransactionId tid, HashMap<PageId, Page> dirtypages) 
-			throws DbException, IOException, TransactionAbortedException {
+	protected int getEmptyPageNo(TransactionId tid, HashMap<PageId, Page> dirtypages)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		// get a read lock on the root pointer page and use it to locate the first header page
 		BTreeRootPtrPage rootPtr = getRootPtrPage(tid, dirtypages);
 		BTreePageId headerId = rootPtr.getHeaderId();
@@ -1259,7 +1264,7 @@ public class BTreeFile implements DbFile {
 	 * @throws TransactionAbortedException
 	 */
 	private Page getEmptyPage(TransactionId tid, HashMap<PageId, Page> dirtypages, int pgcateg)
-			throws DbException, IOException, TransactionAbortedException {
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 		// create the new page
 		int emptyPageNo = getEmptyPageNo(tid, dirtypages);
 		BTreePageId newPageId = new BTreePageId(tableid, emptyPageNo, pgcateg);
@@ -1290,8 +1295,8 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	protected void setEmptyPage(TransactionId tid, HashMap<PageId, Page> dirtypages, int emptyPageNo) 
-			throws DbException, IOException, TransactionAbortedException {
+	protected void setEmptyPage(TransactionId tid, HashMap<PageId, Page> dirtypages, int emptyPageNo)
+			throws DbException, IOException, TransactionAbortedException, InterruptedException {
 
 		// if this is the last page in the file (and not the only page), just 
 		// truncate the file
@@ -1431,7 +1436,7 @@ class BTreeFileIterator extends AbstractDbFileIterator {
 	/**
 	 * Open this iterator by getting an iterator on the first leaf page
 	 */
-	public void open() throws DbException, TransactionAbortedException {
+	public void open() throws DbException, TransactionAbortedException, InterruptedException {
 		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
 				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
 		BTreePageId root = rootPtr.getRootId();
@@ -1446,7 +1451,7 @@ class BTreeFileIterator extends AbstractDbFileIterator {
 	 * @return the next tuple, or null if none exists
 	 */
 	@Override
-	protected Tuple readNext() throws TransactionAbortedException, DbException {
+	protected Tuple readNext() throws TransactionAbortedException, DbException, InterruptedException {
 		if (it != null && !it.hasNext())
 			it = null;
 
@@ -1472,7 +1477,7 @@ class BTreeFileIterator extends AbstractDbFileIterator {
 	/**
 	 * rewind this iterator back to the beginning of the tuples
 	 */
-	public void rewind() throws DbException, TransactionAbortedException {
+	public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
 		close();
 		open();
 	}
@@ -1516,7 +1521,7 @@ class BTreeSearchIterator extends AbstractDbFileIterator {
 	 * Open this iterator by getting an iterator on the first leaf page applicable
 	 * for the given predicate operation
 	 */
-	public void open() throws DbException, TransactionAbortedException {
+	public void open() throws DbException, TransactionAbortedException, InterruptedException {
 		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
 				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
 		BTreePageId root = rootPtr.getRootId();
@@ -1538,7 +1543,7 @@ class BTreeSearchIterator extends AbstractDbFileIterator {
 	 */
 	@Override
 	protected Tuple readNext() throws TransactionAbortedException, DbException,
-	NoSuchElementException {
+			NoSuchElementException, InterruptedException {
 		while (it != null) {
 
 			while (it.hasNext()) {
@@ -1577,7 +1582,7 @@ class BTreeSearchIterator extends AbstractDbFileIterator {
 	/**
 	 * rewind this iterator back to the beginning of the tuples
 	 */
-	public void rewind() throws DbException, TransactionAbortedException {
+	public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
 		close();
 		open();
 	}
@@ -1616,7 +1621,7 @@ class BTreeFileReverseIterator extends AbstractDbFileIterator {
 	/**
 	 * Open this iterator by getting an iterator on the first leaf page
 	 */
-	public void open() throws DbException, TransactionAbortedException {
+	public void open() throws DbException, TransactionAbortedException, InterruptedException {
 		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
 				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
 		BTreePageId root = rootPtr.getRootId();
@@ -1631,7 +1636,7 @@ class BTreeFileReverseIterator extends AbstractDbFileIterator {
 	 * @return the next tuple, or null if none exists
 	 */
 	@Override
-	protected Tuple readNext() throws TransactionAbortedException, DbException {
+	protected Tuple readNext() throws TransactionAbortedException, DbException, InterruptedException {
 		if (it != null && !it.hasNext())
 			it = null;
 
@@ -1657,7 +1662,7 @@ class BTreeFileReverseIterator extends AbstractDbFileIterator {
 	/**
 	 * rewind this iterator back to the beginning of the tuples
 	 */
-	public void rewind() throws DbException, TransactionAbortedException {
+	public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
 		close();
 		open();
 	}
@@ -1703,7 +1708,7 @@ class BTreeReverseSearchIterator extends AbstractDbFileIterator {
 	 * Open this iterator by getting an iterator on the first leaf page applicable
 	 * for the given predicate operation
 	 */
-	public void open() throws DbException, TransactionAbortedException {
+	public void open() throws DbException, TransactionAbortedException, InterruptedException {
 		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
 				tid, BTreeRootPtrPage.getId(f.getId()), Permissions.READ_ONLY);
 		BTreePageId root = rootPtr.getRootId();
@@ -1725,7 +1730,7 @@ class BTreeReverseSearchIterator extends AbstractDbFileIterator {
 	 */
 	@Override
 	protected Tuple readNext() throws TransactionAbortedException, DbException,
-			NoSuchElementException {
+			NoSuchElementException, InterruptedException {
 		while (it != null) {
 
 			while (it.hasNext()) {
@@ -1764,7 +1769,7 @@ class BTreeReverseSearchIterator extends AbstractDbFileIterator {
 	/**
 	 * rewind this iterator back to the beginning of the tuples
 	 */
-	public void rewind() throws DbException, TransactionAbortedException {
+	public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
 		close();
 		open();
 	}

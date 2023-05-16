@@ -103,7 +103,7 @@ public class Aggregate extends Operator {
     }
 
     public void open() throws NoSuchElementException, DbException,
-	    TransactionAbortedException {
+            TransactionAbortedException, InterruptedException {
 	// some code goes here
         child.open();
         super.open();//这里需要super.open吗
@@ -120,14 +120,14 @@ public class Aggregate extends Operator {
      * the result tuple should contain one field representing the result of the
      * aggregate. Should return null if there are no more tuples.
      */
-    protected Tuple fetchNext() throws TransactionAbortedException, DbException {
+    protected Tuple fetchNext() throws TransactionAbortedException, DbException, InterruptedException {
 	// some code goes here
 	    while(aggIt.hasNext())
             return aggIt.next();
         return null;
     }
 
-    public void rewind() throws DbException, TransactionAbortedException {
+    public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
 	// some code goes here
         aggIt.rewind();
     }

@@ -19,7 +19,7 @@ public class LogTest extends SimpleDbTestBase {
     HeapFile hf2;
 
     void insertRow(HeapFile hf, Transaction t, int v1, int v2)
-        throws DbException, TransactionAbortedException {
+            throws DbException, TransactionAbortedException, InterruptedException {
         // Create a row to insert
         TupleDesc twoIntColumns = Utility.getTupleDesc(2);
         Tuple value = new Tuple(twoIntColumns);
@@ -39,7 +39,7 @@ public class LogTest extends SimpleDbTestBase {
 
     // check that the specified tuple is, or is not, present
     void look(HeapFile hf, Transaction t, int v1, boolean present)
-        throws DbException, TransactionAbortedException {
+            throws DbException, TransactionAbortedException, InterruptedException {
         int count = 0;
         SeqScan scan = new SeqScan(t.getId(), hf.getId(), "");
         scan.open();
@@ -60,7 +60,7 @@ public class LogTest extends SimpleDbTestBase {
 
     // insert tuples
     void doInsert(HeapFile hf, int t1, int t2)
-        throws DbException, TransactionAbortedException, IOException {
+            throws DbException, TransactionAbortedException, IOException, InterruptedException {
         Transaction t = new Transaction();
         t.start();
         if(t1 != -1)
@@ -85,7 +85,7 @@ public class LogTest extends SimpleDbTestBase {
     // force dirty pages to disk, defeating NO-STEAL
     // abort
     void dontInsert(HeapFile hf, int t1, int t2)
-        throws DbException, TransactionAbortedException, IOException {
+            throws DbException, TransactionAbortedException, IOException, InterruptedException {
         Transaction t = new Transaction();
         t.start();
         if(t1 != -1)
@@ -127,7 +127,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void PatchTest()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
 
         // *** Test:
@@ -153,7 +153,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestFlushAll()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
 
         // *** Test:
@@ -172,7 +172,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestCommitCrash()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
 
         // *** Test:
@@ -191,7 +191,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestAbort()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
         doInsert(hf1, 1, 2);
 
@@ -211,7 +211,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestAbortCommitInterleaved()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
         doInsert(hf1, 1, 2);
 
@@ -244,7 +244,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestAbortCrash()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
         doInsert(hf1, 1, 2);
 
@@ -273,7 +273,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestCommitAbortCommitCrash()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
         doInsert(hf1, 1, 2);
 
@@ -313,7 +313,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestOpenCrash()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
         doInsert(hf1, 1, 2);
 
@@ -339,7 +339,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestOpenCommitOpenCrash()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
         doInsert(hf1, 1, 2);
 
@@ -380,7 +380,7 @@ public class LogTest extends SimpleDbTestBase {
     }
 
     @Test public void TestOpenCommitCheckpointOpenCrash()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         setup();
         doInsert(hf1, 1, 2);
 

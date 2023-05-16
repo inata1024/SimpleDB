@@ -46,7 +46,7 @@ public class Project extends Operator {
     }
 
     public void open() throws DbException, NoSuchElementException,
-            TransactionAbortedException {
+            TransactionAbortedException, InterruptedException {
         child.open();
         super.open();
     }
@@ -56,7 +56,7 @@ public class Project extends Operator {
         child.close();
     }
 
-    public void rewind() throws DbException, TransactionAbortedException {
+    public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
         child.rewind();
     }
 
@@ -67,7 +67,7 @@ public class Project extends Operator {
      * @return The next tuple, or null if there are no more tuples
      */
     protected Tuple fetchNext() throws NoSuchElementException,
-            TransactionAbortedException, DbException {
+            TransactionAbortedException, DbException, InterruptedException {
         while (child.hasNext()) {
             Tuple t = child.next();
             Tuple newTuple = new Tuple(td);

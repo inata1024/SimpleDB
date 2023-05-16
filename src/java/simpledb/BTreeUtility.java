@@ -115,7 +115,7 @@ public class BTreeUtility {
 	public static BTreeFile createRandomBTreeFile(
 			int columns, int rows, Map<Integer, Integer> columnSpecification,
 			ArrayList<ArrayList<Integer>> tuples, int keyField)
-					throws IOException, DbException, TransactionAbortedException {
+			throws IOException, DbException, TransactionAbortedException, InterruptedException {
 		return createRandomBTreeFile(columns, rows, MAX_RAND_VALUE, columnSpecification, tuples, keyField);
 	}
 
@@ -134,8 +134,8 @@ public class BTreeUtility {
 	 */
 	public static BTreeFile createRandomBTreeFile(int columns, int rows,
 			int maxValue, Map<Integer, Integer> columnSpecification,
-			ArrayList<ArrayList<Integer>> tuples, int keyField) 
-					throws IOException, DbException, TransactionAbortedException {
+			ArrayList<ArrayList<Integer>> tuples, int keyField)
+			throws IOException, DbException, TransactionAbortedException, InterruptedException {
 
 		if (tuples != null) {
 			tuples.clear();
@@ -378,8 +378,8 @@ public class BTreeUtility {
 	 */
 	public static BTreeFile createBTreeFile(int columns, int rows,
 			Map<Integer, Integer> columnSpecification,
-			ArrayList<ArrayList<Integer>> tuples, int keyField) 
-					throws IOException, DbException, TransactionAbortedException {
+			ArrayList<ArrayList<Integer>> tuples, int keyField)
+			throws IOException, DbException, TransactionAbortedException, InterruptedException {
 		if (tuples != null) {
 			tuples.clear();
 		} else {

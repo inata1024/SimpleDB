@@ -23,7 +23,7 @@ public class TransactionTest extends SimpleDbTestBase {
     // Wait up to 10 minutes for the test to complete
     private static final int TIMEOUT_MILLIS = 10 * 60 * 1000;
     private void validateTransactions(int threads)
-            throws DbException, TransactionAbortedException, IOException {
+            throws DbException, TransactionAbortedException, IOException, InterruptedException {
         // Create a table with a single integer value = 0
         HashMap<Integer, Integer> columnSpecification = new HashMap<Integer, Integer>();
         columnSpecification.put(0, 0);
@@ -207,27 +207,27 @@ public class TransactionTest extends SimpleDbTestBase {
     }
     
     @Test public void testSingleThread()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         validateTransactions(1);
     }
 
     @Test public void testTwoThreads()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         validateTransactions(2);
     }
 
     @Test public void testFiveThreads()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         validateTransactions(5);
     }
     
     @Test public void testTenThreads()
-    throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         validateTransactions(10);
     }
 
     @Test public void testAllDirtyFails()
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
         // Allocate a file with ~10 pages of data
         HeapFile f = SystemTestUtil.createRandomHeapFile(2, 512*10, null, null);
         Database.resetBufferPool(1);

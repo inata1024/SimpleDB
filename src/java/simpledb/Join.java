@@ -72,7 +72,7 @@ public class Join extends Operator {
     }
 
     public void open() throws DbException, NoSuchElementException,
-            TransactionAbortedException {
+            TransactionAbortedException, InterruptedException {
         // some code goes here
         child2.open();
         child1.open();
@@ -88,7 +88,7 @@ public class Join extends Operator {
         child2.close();
     }
 
-    public void rewind() throws DbException, TransactionAbortedException {
+    public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
         // some code goes here
         child2.rewind();
         child1.rewind();
@@ -114,7 +114,7 @@ public class Join extends Operator {
      * @return The next matching tuple.
      * @see JoinPredicate#filter
      */
-    protected Tuple fetchNext() throws TransactionAbortedException, DbException {
+    protected Tuple fetchNext() throws TransactionAbortedException, DbException, InterruptedException {
         // some code goes here
         while(child1_curr_tuple!=null)
         {

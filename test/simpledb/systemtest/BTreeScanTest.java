@@ -29,7 +29,7 @@ public class BTreeScanTest extends SimpleDbTestBase {
     
     /** Tests the scan operator for a table with the specified dimensions. */
     private void validateScan(int[] columnSizes, int[] rowSizes)
-            throws IOException, DbException, TransactionAbortedException {
+            throws IOException, DbException, TransactionAbortedException, InterruptedException {
     	TransactionId tid = new TransactionId();
     	for (int columns : columnSizes) {
     		int keyField = r.nextInt(columns);
@@ -80,7 +80,7 @@ public class BTreeScanTest extends SimpleDbTestBase {
     }
     
     /** Scan 1-4 columns. */
-    @Test public void testSmall() throws IOException, DbException, TransactionAbortedException {
+    @Test public void testSmall() throws IOException, DbException, TransactionAbortedException, InterruptedException {
         int[] columnSizes = new int[]{1, 2, 3, 4};
         int[] rowSizes =
                 new int[]{0, 1, 2, 511, 512, 513, 1023, 1024, 1025, 4096 + r.nextInt(4096)};
@@ -88,7 +88,7 @@ public class BTreeScanTest extends SimpleDbTestBase {
     }
 
     /** Test that rewinding a BTreeScan iterator works. */
-    @Test public void testRewind() throws IOException, DbException, TransactionAbortedException {
+    @Test public void testRewind() throws IOException, DbException, TransactionAbortedException, InterruptedException {
         ArrayList<ArrayList<Integer>> tuples = new ArrayList<ArrayList<Integer>>();
         int keyField = r.nextInt(2);
         BTreeFile f = BTreeUtility.createRandomBTreeFile(2, 1000, null, tuples, keyField);
@@ -114,7 +114,7 @@ public class BTreeScanTest extends SimpleDbTestBase {
     }
     
     /** Test that rewinding a BTreeScan iterator works with predicates. */
-    @Test public void testRewindPredicates() throws IOException, DbException, TransactionAbortedException {
+    @Test public void testRewindPredicates() throws IOException, DbException, TransactionAbortedException, InterruptedException {
     	// Create the table
         ArrayList<ArrayList<Integer>> tuples = new ArrayList<ArrayList<Integer>>();
         int keyField = r.nextInt(3);

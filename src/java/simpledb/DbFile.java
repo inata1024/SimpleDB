@@ -41,7 +41,7 @@ public interface DbFile {
      * @throws IOException if the needed file can't be read/written
      */
     public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
-        throws DbException, IOException, TransactionAbortedException;
+            throws DbException, IOException, TransactionAbortedException, InterruptedException;
 
     /**
      * Removes the specified tuple from the file on behalf of the specified
@@ -57,7 +57,7 @@ public interface DbFile {
      *   of the file
      */
     public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t)
-        throws DbException, IOException, TransactionAbortedException;
+            throws DbException, IOException, TransactionAbortedException, InterruptedException;
 
     /**
      * Returns an iterator over all the tuples stored in this DbFile. The

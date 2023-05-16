@@ -80,7 +80,7 @@ public class SeqScan implements OpIterator {
         this(tid, tableId, Database.getCatalog().getTableName(tableId));
     }
 
-    public void open() throws DbException, TransactionAbortedException {
+    public void open() throws DbException, TransactionAbortedException, InterruptedException {
         // some code goes here
         it.open();
     }
@@ -110,13 +110,13 @@ public class SeqScan implements OpIterator {
         return new TupleDesc(typeAr,fieldAr);
     }
 
-    public boolean hasNext() throws TransactionAbortedException, DbException {
+    public boolean hasNext() throws TransactionAbortedException, DbException, InterruptedException {
         // some code goes here
         return it.hasNext();
     }
 
     public Tuple next() throws NoSuchElementException,
-            TransactionAbortedException, DbException {
+            TransactionAbortedException, DbException, InterruptedException {
         // some code goes here
         if(!it.hasNext())
             throw new NoSuchElementException();
@@ -129,7 +129,7 @@ public class SeqScan implements OpIterator {
     }
 
     public void rewind() throws DbException, NoSuchElementException,
-            TransactionAbortedException {
+            TransactionAbortedException, InterruptedException {
         // some code goes here
         it.rewind();
     }

@@ -107,8 +107,8 @@ public class HeapFile implements DbFile {
     }
 
     // see DbFile.java for javadocs
-    public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
-            throws DbException, IOException, TransactionAbortedException {
+    public synchronized ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
+            throws DbException, IOException, TransactionAbortedException, InterruptedException {
         // some code goes here
         //通过构造pid，向BufferPool请求page
         //疑惑：修改BufferPool传出来的Page，会不会只修改了一个副本？？
@@ -116,10 +116,19 @@ public class HeapFile implements DbFile {
         ArrayList<Page> ans=new ArrayList<>();
         int pos=0;
         BufferPool bp=Database.getBufferPool();
-        HeapPage currPg=(HeapPage) bp.getPage(tid,new HeapPageId(getId(),pos++),Permissions.READ_WRITE);
+        HeapPage currPg=(HeapPage) bp.getPage(tid,new HeapPageId(getId(),pos++),Permissions.READ_ONLY);
 
         while(pos<numPages()&&currPg.getNumEmptySlots()==0)
-            currPg=(HeapPage) bp.getPage(tid,new HeapPageId(getId(),pos++),Permissions.READ_WRITE);
+        {
+            //如果currPg满了，可以立即释放锁
+            if(currPg.getNumEmptySlots()==0)
+                bp.releasePage(tid, currPg.getId());
+            currPg=(HeapPage) bp.getPage(tid,new HeapPageId(getId(),pos++),Permissions.READ_ONLY);
+        }
+        //之前找空闲的page，只需要READ_ONLY
+        //找到后再提升至READ_WRITE
+        currPg=(HeapPage) bp.getPage(tid,currPg.getId(),Permissions.READ_WRITE);
+
         //若请求成功
         //细节：这里的判断条件不能用pos<numPages(),因为最后一个Page请求成功与失败都是pos==numPages()
         if(currPg.getNumEmptySlots()!=0)
@@ -152,7 +161,7 @@ public class HeapFile implements DbFile {
 
     // see DbFile.java for javadocs
     public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
-            TransactionAbortedException {
+            TransactionAbortedException, InterruptedException {
         // some code goes here
         ArrayList<Page> ans=new ArrayList<>();
         BufferPool bp=Database.getBufferPool();
@@ -193,7 +202,7 @@ public class HeapFile implements DbFile {
         /**
          * Open this iterator by getting an iterator on the first page
          */
-        public void open() throws DbException, TransactionAbortedException {
+        public void open() throws DbException, TransactionAbortedException, InterruptedException {
             pgNo=0;
             HeapPageId pid=new HeapPageId(getId(),0);
             pg=(HeapPage) Database.getBufferPool().getPage(tid,pid,Permissions.READ_ONLY);
@@ -226,7 +235,7 @@ public class HeapFile implements DbFile {
         }
 
         @Override
-        public Tuple next() throws NoSuchElementException, TransactionAbortedException, DbException {
+        public Tuple next() throws NoSuchElementException, TransactionAbortedException, DbException, InterruptedException {
             if(!this.hasNext())
                 throw new NoSuchElementException();
             if(it.hasNext())
@@ -245,7 +254,7 @@ public class HeapFile implements DbFile {
         /**
          * rewind this iterator back to the beginning of the tuples
          */
-        public void rewind() throws DbException, TransactionAbortedException {
+        public void rewind() throws DbException, TransactionAbortedException, InterruptedException {
             close();
             open();
         }
