@@ -37,7 +37,7 @@ public class BufferPool {
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
-    private int Policy=1;//1：LRU 2：MRU 3：随机策略 默认为LRU
+    private int Policy=3;//1：LRU 2：MRU 3：随机策略 默认为LRU
     
     /** Default number of pages passed to the constructor. This is used by
     other classes. BufferPool should use the numPages argument to the
@@ -57,7 +57,7 @@ public class BufferPool {
         tid2lock=new ConcurrentHashMap<>();
         id2date=new ConcurrentHashMap<>();
         maxPagenum=numPages;
-        SLEEP_INTERVAL = 500;
+        SLEEP_INTERVAL = 50;
     }
     
     public static int getPageSize() {
@@ -104,7 +104,7 @@ public class BufferPool {
      * @param pid the ID of the requested page
      * @param perm the requested permissions on the page
      */
-    public synchronized Page getPage(TransactionId tid, PageId pid, Permissions perm)
+    public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException, InterruptedException {
         // some code goes here
         /**
@@ -115,6 +115,7 @@ public class BufferPool {
          */
 
         int needLock=-1;//判断是否需要加锁的标志，默认-1为不需要，0为ex锁，1为shared锁
+        boolean lockAllocated=false;//是否申请到锁
         //读 并且 不拥有锁 需要进一步判断
         if(perm==Permissions.READ_ONLY&&!ownLock(tid,pid))
         {
@@ -127,9 +128,18 @@ public class BufferPool {
                 //如果page上是exclusive锁
                 else
                 {
-                    //阻塞直到page上没锁
-                    while(pid2lock.containsKey(pid))
+                    //阻塞直到page上没锁,用lockAllocated解决抢锁的情况
+                    while(!lockAllocated)
+                    {
                         Thread.sleep(SLEEP_INTERVAL);
+                        //当前线程尝试获取锁,或许可以用double checking提升性能
+                        //就看哪个线程抢得快
+                        synchronized (this){
+                            //若该page锁已解除
+                            if(!pid2lock.containsKey(pid))
+                                lockAllocated=true;//当前线程获得锁
+                        }
+                    }
                     needLock=1;//加shared锁
                 }
             }
@@ -146,16 +156,28 @@ public class BufferPool {
             if(ownLock(tid,pid)&&pid2lock.get(pid)>0)
             {
                 //如果非唯一拥有，阻塞直到唯一拥有
-                while(pid2lock.get(pid)>1)
+                while(!lockAllocated)
+                {
                     Thread.sleep(SLEEP_INTERVAL);
+                    synchronized (this){
+                        if(pid2lock.get(pid)==1)
+                            lockAllocated=true;
+                    }
+                }
                 needLock=0;//加ex锁
             }
             //tid没有对page的锁
             if(!ownLock(tid,pid))
             {
                 //如果page上有锁，阻塞直到没锁；没锁就不用阻塞
-                while(pid2lock.containsKey(pid))
+                while(!lockAllocated)
+                {
                     Thread.sleep(SLEEP_INTERVAL);
+                    synchronized (this){
+                        if(!pid2lock.containsKey(pid))
+                            lockAllocated=true;
+                    }
+                }
                 needLock=0;//加ex锁
             }
         }
@@ -167,19 +189,15 @@ public class BufferPool {
             if(pid2lock.containsKey(pid))
                 pid2lock.put(pid,pid2lock.get(pid)+1);
             else
-            {
-                pid2lock.put(pid,1);
-                HashSet<PageId> temp=tid2lock.get(tid);
-                temp.add(pid);
-            }
+                pid2lock.put(pid, 1);
         }
         //加ex锁
         if(needLock==0)
         {
             pid2lock.put(pid,0);
-            HashSet<PageId> temp=tid2lock.get(tid);
-            temp.add(pid);
         }
+        HashSet<PageId> temp=tid2lock.get(tid);
+        temp.add(pid);
 
         //getPage
         if(id2pg.containsKey(pid))
@@ -210,7 +228,7 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param pid the ID of the page to unlock
      */
-    public void releasePage(TransactionId tid, PageId pid) {
+    public synchronized void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
         //如果是ex锁，直接remove；如果是shared锁，得分情况
@@ -245,9 +263,7 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
-        HashSet<PageId> t_locks=tid2lock.get(tid);
-        for (PageId tLock : t_locks) releasePage(tid, tLock);
-
+        transactionComplete(tid,true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
@@ -268,6 +284,33 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        HashSet<PageId> t_locks= (HashSet<PageId>) tid2lock.get(tid).clone();
+        if(commit)
+            flushPages(tid);
+        else
+        {
+            //将所有更改复原
+            //从transaction拥有的所有page中
+            for (PageId pid : t_locks)
+            {
+                //找出改过的
+                //transaction拥有的，不一定在bp中
+                if(id2pg.containsKey(pid)&&id2pg.get(pid).isDirty()!=null)
+                {
+                    //从disk取出来
+                    DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
+                    Page newPage = table.readPage(pid);
+                    //更新bp中的page
+                    id2pg.put(pid,newPage);
+                }
+
+            }
+        }
+        //解锁
+        //这里曾出现ConcurrentModificationException，查资料发现可能是因为一边遍历t_locks，releasePage又再改t_locks
+        //t_locks是通过get方法得到的，只传了一个引用，将get到的对象进行clone后，异常消失
+        for (PageId tLock : t_locks) releasePage(tid, tLock);
+
     }
 
     /**
@@ -387,6 +430,12 @@ public class BufferPool {
     public synchronized  void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        Set<PageId> pids = tid2lock.get(tid);
+        for(PageId pid : pids) {
+            //仅在ex锁时flush
+            if(pid2lock.get(pid)==0)
+                flushPage(pid);
+        }
     }
 
     /**
@@ -407,7 +456,9 @@ public class BufferPool {
             case 1:{
                 for(PageId pid : pids) {
                     Date currDate=id2date.get(pid);
-                    if(currDate.compareTo(evictDate)<0)
+                    //必须是clean page
+                    //由于计时方法准确性不足，这里可能出错
+                    if(currDate.compareTo(evictDate)<0&&id2pg.get(pid).isDirty()==null)
                     {
                         evictDate=currDate;
                         evictPgId=pid;
@@ -419,7 +470,7 @@ public class BufferPool {
                 evictDate=new Date(0);//初始化为最早的时间
                 for(PageId pid : pids) {
                     Date currDate=id2date.get(pid);
-                    if(currDate.compareTo(evictDate)>0)
+                    if(currDate.compareTo(evictDate)>0&&id2pg.get(pid).isDirty()==null)
                     {
                         evictDate=currDate;
                         evictPgId=pid;
@@ -429,17 +480,18 @@ public class BufferPool {
             }
             case 3:{
                 //在id2pg中随机取一个
-                Random rand = new Random();
-                int pos=rand.nextInt(pids.size()),i=0;
+                //Random rand = new Random();
+                //int pos=rand.nextInt(pids.size()),i=0;
                 for(PageId pid:pids){
-                    if(i==pos)
+                    if(id2pg.get(pid).isDirty()==null)
                         evictPgId=pid;
-                    i++;
                 }
                 break;
             }
             default:throw new IllegalArgumentException();
         }
+        if(evictPgId==null)
+            throw new DbException("all pages are dirty");
 
         Page target=id2pg.get(evictPgId);
         if(target.isDirty()!=null)//如果是dirty page，需要flush
@@ -452,6 +504,7 @@ public class BufferPool {
         }
         id2date.remove(evictPgId);//evictPgId一定不为null
         id2pg.remove(evictPgId);
+
     }
     /**
      * Set eviction policy
