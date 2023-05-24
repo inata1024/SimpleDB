@@ -45,6 +45,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
     //事务获取不到锁时需要等待
     private final long SLEEP_INTERVAL;
+    private final long DeadLockDetectCount;
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -57,7 +58,8 @@ public class BufferPool {
         tid2lock=new ConcurrentHashMap<>();
         id2date=new ConcurrentHashMap<>();
         maxPagenum=numPages;
-        SLEEP_INTERVAL = 50;
+        SLEEP_INTERVAL = 100;
+        DeadLockDetectCount=25;
     }
     
     public static int getPageSize() {
@@ -85,7 +87,9 @@ public class BufferPool {
             tid2lock.put(tid,hs);
             return false;
         }
-        return tid2lock.get(tid).contains(pid);
+        HashSet<PageId> hs=tid2lock.get(tid);
+        boolean a=hs.contains(pid);
+        return a;
     }
 
     /**
@@ -128,6 +132,7 @@ public class BufferPool {
                 //如果page上是exclusive锁
                 else
                 {
+                    int count=0;
                     //阻塞直到page上没锁,用lockAllocated解决抢锁的情况
                     while(!lockAllocated)
                     {
@@ -135,9 +140,19 @@ public class BufferPool {
                         //当前线程尝试获取锁,或许可以用double checking提升性能
                         //就看哪个线程抢得快
                         synchronized (this){
+                            //当循环次数超过某值，判断有deadlock
+                            if(count>DeadLockDetectCount)
+                            {
+                                throw new TransactionAbortedException();
+                            }
                             //若该page锁已解除
                             if(!pid2lock.containsKey(pid))
+                            {
                                 lockAllocated=true;//当前线程获得锁
+                                pid2lock.put(pid,-1);//仅用-1占位，表示page上没锁
+                            }
+
+                            count++;
                         }
                     }
                     needLock=1;//加shared锁
@@ -146,22 +161,39 @@ public class BufferPool {
             //如果page上没锁
             else
             {
+                pid2lock.put(pid,-1);//仅用-1占位，表示page上没锁
                 needLock=1;//加shared锁
             }
         }
+        int debug=0;
+        if(perm==Permissions.READ_ONLY&&!pid2lock.containsKey(pid))
+            debug=1;
 
         if(perm==Permissions.READ_WRITE)
         {
             //tid拥有对page的锁，如果是shared，需要进一步判断；如果是ex，直接getpage
             if(ownLock(tid,pid)&&pid2lock.get(pid)>0)
             {
+                int count=0;
                 //如果非唯一拥有，阻塞直到唯一拥有
+                //可能有多个线程等着唯一拥有，导致死锁
                 while(!lockAllocated)
                 {
                     Thread.sleep(SLEEP_INTERVAL);
                     synchronized (this){
+                        //当循环次数超过某值，判断有deadlock
+                        if(count>DeadLockDetectCount)
+                        {
+                            throw new TransactionAbortedException();
+                        }
+                        if(!pid2lock.containsKey(pid))
+                            debug=1;
                         if(pid2lock.get(pid)==1)
+                        {
+                            pid2lock.put(pid,0);//这一步不太必要，因为这里多线程抢锁会导致死锁
                             lockAllocated=true;
+                        }
+                        count++;
                     }
                 }
                 needLock=0;//加ex锁
@@ -169,35 +201,47 @@ public class BufferPool {
             //tid没有对page的锁
             if(!ownLock(tid,pid))
             {
+                int count=0;
                 //如果page上有锁，阻塞直到没锁；没锁就不用阻塞
                 while(!lockAllocated)
                 {
                     Thread.sleep(SLEEP_INTERVAL);
                     synchronized (this){
+                        //当循环次数超过某值，判断有deadlock
+                        if(count>DeadLockDetectCount)
+                        {
+                            throw new TransactionAbortedException();
+                        }
                         if(!pid2lock.containsKey(pid))
+                        {
                             lockAllocated=true;
+                            pid2lock.put(pid,0);//修改共享变量，确保只有一个线程获得锁
+                        }
+                        count++;
                     }
                 }
                 needLock=0;//加ex锁
             }
         }
-
-        //加shared锁
-        if(needLock==1)
-        {
-            //若已有shared锁,自增1表示多了一个shared锁
-            if(pid2lock.containsKey(pid))
-                pid2lock.put(pid,pid2lock.get(pid)+1);
-            else
-                pid2lock.put(pid, 1);
+        synchronized (this){
+            //加shared锁
+            if(needLock==1)
+            {
+                //若已有shared锁,自增1表示多了一个shared锁
+                if(pid2lock.get(pid)>0)//这里为什么会出现NullPointer?
+                    pid2lock.put(pid,pid2lock.get(pid)+1);
+                else
+                    pid2lock.put(pid, 1);
+            }
+            //加ex锁
+            if(needLock==0)
+            {
+                pid2lock.put(pid,0);
+            }
+            HashSet<PageId> temp=tid2lock.get(tid);
+            temp.add(pid);
+            tid2lock.put(tid,temp);
         }
-        //加ex锁
-        if(needLock==0)
-        {
-            pid2lock.put(pid,0);
-        }
-        HashSet<PageId> temp=tid2lock.get(tid);
-        temp.add(pid);
 
         //getPage
         if(id2pg.containsKey(pid))
@@ -219,6 +263,17 @@ public class BufferPool {
         }
     }
 
+    public boolean check(){
+        for(TransactionId tid:tid2lock.keySet()){
+            HashSet<PageId> hs = tid2lock.get(tid);
+            for(PageId id:hs) {
+                if(!pid2lock.containsKey(id))
+                    return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Releases the lock on a page.
      * Calling this is very risky, and may result in wrong behavior. Think hard
@@ -236,6 +291,18 @@ public class BufferPool {
         //获取transaction拥有的锁
         HashSet<PageId> t_locks=tid2lock.get(tid);
         Integer lockType=pid2lock.get(pid);
+
+        int debug=0;
+        if(!pid2lock.containsKey(pid))//???
+        {
+            //tid不拥有对此page的锁
+            t_locks.remove(pid);
+            //更新tid的所有锁
+            tid2lock.put(tid,t_locks);
+            return ;//不知道为什么会出现这种情况
+            //debug=1;//调试用
+        }
+
         //如果是shared锁
         if(lockType>0)
         {
@@ -253,6 +320,9 @@ public class BufferPool {
         t_locks.remove(pid);
         //更新tid的所有锁
         tid2lock.put(tid,t_locks);
+
+        if(check())
+            debug=1;//调试用
     }
 
     /**
@@ -260,7 +330,7 @@ public class BufferPool {
      *
      * @param tid the ID of the transaction requesting the unlock
      */
-    public void transactionComplete(TransactionId tid) throws IOException {
+    public synchronized void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
         transactionComplete(tid,true);
@@ -280,7 +350,7 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param commit a flag indicating whether we should commit or abort
      */
-    public void transactionComplete(TransactionId tid, boolean commit)
+    public synchronized void transactionComplete(TransactionId tid, boolean commit)
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2

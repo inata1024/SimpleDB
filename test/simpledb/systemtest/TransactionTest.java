@@ -141,7 +141,7 @@ public class TransactionTest extends SimpleDbTestBase {
                         latch.stillParticipating();
                     }
                 }
-                //System.out.println("thread " + id + " done");
+                System.out.println("thread " + Thread.currentThread().getId() + " done");
             } catch (Exception e) {
                 // Store exception for the master thread to handle
                 exception = e;
