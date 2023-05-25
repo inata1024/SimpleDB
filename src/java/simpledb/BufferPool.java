@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 
+import java.security.cert.TrustAnchor;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountedCompleter;
@@ -31,7 +32,10 @@ public class BufferPool {
     /**
      * 通过TransactionId确定一个Transaction包含的锁
      */
+
     private ConcurrentHashMap<TransactionId,HashSet<PageId>> tid2lock;
+    //用于检测deadlock的等待依赖表
+    private ConcurrentHashMap<TransactionId,PageId> want;
 
     private int maxPagenum;
     private static final int DEFAULT_PAGE_SIZE = 4096;
@@ -57,8 +61,9 @@ public class BufferPool {
         pid2lock=new ConcurrentHashMap<PageId,Integer>();
         tid2lock=new ConcurrentHashMap<>();
         id2date=new ConcurrentHashMap<>();
+        want=new ConcurrentHashMap<>();
         maxPagenum=numPages;
-        SLEEP_INTERVAL = 100;
+        SLEEP_INTERVAL = 1;
         DeadLockDetectCount=25;
     }
     
@@ -140,18 +145,31 @@ public class BufferPool {
                         //当前线程尝试获取锁,或许可以用double checking提升性能
                         //就看哪个线程抢得快
                         synchronized (this){
-                            //当循环次数超过某值，判断有deadlock
-                            if(count>DeadLockDetectCount)
-                            {
-                                throw new TransactionAbortedException();
-                            }
+//                            //当循环次数超过某值，判断有deadlock
+//                            if(count>DeadLockDetectCount)
+//                            {
+//                                throw new TransactionAbortedException();
+//                            }
                             //若该page锁已解除
                             if(!pid2lock.containsKey(pid))
                             {
                                 lockAllocated=true;//当前线程获得锁
                                 pid2lock.put(pid,-1);//仅用-1占位，表示page上没锁
                             }
-
+                            else
+                            {
+                                want.put(tid,pid);
+                                if(count>DeadLockDetectCount)
+                                //否则一定在等待某个tid解锁,若这个tid也在等别人，就判断有死锁.此处这个tid是唯一的
+                                //性能的妥协：只检测直接等待的
+                                {
+                                    for(TransactionId temp :tid2lock.keySet())
+                                        if(temp!=tid&&tid2lock.get(temp).contains(pid)&&want.containsKey(temp)) {
+                                            System.out.println("kill from 1");
+                                            throw new TransactionAbortedException();
+                                        }
+                                }
+                            }
                             count++;
                         }
                     }
@@ -181,17 +199,34 @@ public class BufferPool {
                 {
                     Thread.sleep(SLEEP_INTERVAL);
                     synchronized (this){
-                        //当循环次数超过某值，判断有deadlock
-                        if(count>DeadLockDetectCount)
-                        {
-                            throw new TransactionAbortedException();
-                        }
+//                        //当循环次数超过某值，判断有deadlock
+//                        if(count>DeadLockDetectCount)
+//                        {
+//                            throw new TransactionAbortedException();
+//                        }
                         if(!pid2lock.containsKey(pid))
                             debug=1;
                         if(pid2lock.get(pid)==1)
                         {
                             pid2lock.put(pid,0);//这一步不太必要，因为这里多线程抢锁会导致死锁
                             lockAllocated=true;
+                        }
+                        else {
+                            want.put(tid,pid);//发出等待请求
+                            if(count>DeadLockDetectCount)//多次循环后再检测
+                            {
+                                for(TransactionId id:want.keySet())
+                                {
+                                    //若id拥有对pid的锁，并且希望得到对pid的锁，说明是想升级
+                                    //id应不等于当前tid，才是死锁
+                                    if(id!=tid&&tid2lock.get(id).contains(pid)&&want.get(id).equals(pid))
+                                    {
+                                        System.out.println("kill from 2");
+                                        throw new TransactionAbortedException();
+                                    }
+
+                                }
+                            }
                         }
                         count++;
                     }
@@ -207,15 +242,29 @@ public class BufferPool {
                 {
                     Thread.sleep(SLEEP_INTERVAL);
                     synchronized (this){
-                        //当循环次数超过某值，判断有deadlock
-                        if(count>DeadLockDetectCount)
-                        {
-                            throw new TransactionAbortedException();
-                        }
+//                        //当循环次数超过某值，判断有deadlock
+//                        if(count>DeadLockDetectCount)
+//                        {
+//                            throw new TransactionAbortedException();
+//                        }
                         if(!pid2lock.containsKey(pid))
                         {
                             lockAllocated=true;
                             pid2lock.put(pid,0);//修改共享变量，确保只有一个线程获得锁
+                        }
+                        else
+                        {
+                            want.put(tid,pid);
+                            if(count>DeadLockDetectCount)
+                            //否则一定在等待某个tid解锁,若这个tid也在等别人，就判断有死锁.此处这个tid是唯一的
+                            //性能的妥协：只检测直接等待的
+                            {
+                                for(TransactionId temp :tid2lock.keySet())
+                                    if(temp!=tid&&tid2lock.get(temp).contains(pid)&&want.containsKey(temp)) {
+                                        System.out.println("kill from 3");
+                                        throw new TransactionAbortedException();
+                                    }
+                            }
                         }
                         count++;
                     }
@@ -354,6 +403,12 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        //tid不拥有任何锁的情况，因为没改任何页面，直接return
+        if(!tid2lock.containsKey(tid))
+        {
+            return;
+        }
+
         HashSet<PageId> t_locks= (HashSet<PageId>) tid2lock.get(tid).clone();
         if(commit)
             flushPages(tid);
