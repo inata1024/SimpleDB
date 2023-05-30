@@ -164,7 +164,7 @@ public class BufferPool {
                                 //性能的妥协：只检测直接等待的
                                 {
                                     for(TransactionId temp :tid2lock.keySet())
-                                        if(temp!=tid&&tid2lock.get(temp).contains(pid)&&want.containsKey(temp)) {
+                                        if(!temp.equals(tid)&&tid2lock.get(temp).contains(pid)&&want.containsKey(temp)) {
                                             System.out.println("kill from 1");
                                             throw new TransactionAbortedException();
                                         }
@@ -183,9 +183,6 @@ public class BufferPool {
                 needLock=1;//加shared锁
             }
         }
-        int debug=0;
-        if(perm==Permissions.READ_ONLY&&!pid2lock.containsKey(pid))
-            debug=1;
 
         if(perm==Permissions.READ_WRITE)
         {
@@ -204,8 +201,7 @@ public class BufferPool {
 //                        {
 //                            throw new TransactionAbortedException();
 //                        }
-                        if(!pid2lock.containsKey(pid))
-                            debug=1;
+
                         if(pid2lock.get(pid)==1)
                         {
                             pid2lock.put(pid,0);//这一步不太必要，因为这里多线程抢锁会导致死锁
@@ -219,7 +215,7 @@ public class BufferPool {
                                 {
                                     //若id拥有对pid的锁，并且希望得到对pid的锁，说明是想升级
                                     //id应不等于当前tid，才是死锁
-                                    if(id!=tid&&tid2lock.get(id).contains(pid)&&want.get(id).equals(pid))
+                                    if(!id.equals(tid)&&tid2lock.get(id).contains(pid)&&want.get(id).equals(pid))
                                     {
                                         System.out.println("kill from 2");
                                         throw new TransactionAbortedException();
@@ -260,7 +256,7 @@ public class BufferPool {
                             //性能的妥协：只检测直接等待的
                             {
                                 for(TransactionId temp :tid2lock.keySet())
-                                    if(temp!=tid&&tid2lock.get(temp).contains(pid)&&want.containsKey(temp)) {
+                                    if(!temp.equals(tid)&&tid2lock.get(temp).contains(pid)&&want.containsKey(temp)) {
                                         System.out.println("kill from 3");
                                         throw new TransactionAbortedException();
                                     }
@@ -408,7 +404,6 @@ public class BufferPool {
         {
             return;
         }
-
         HashSet<PageId> t_locks= (HashSet<PageId>) tid2lock.get(tid).clone();
         if(commit)
             flushPages(tid);

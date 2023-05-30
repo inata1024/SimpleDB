@@ -267,7 +267,7 @@ public class HeapFile implements DbFile {
             pgNo=0;
             it = null;
             f=null;
-            tid=null;
+            //tid=null;
 
         }
     }
