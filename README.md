@@ -16,6 +16,6 @@ There are 6 labs in total and I have completed **lab1 ~ lab4**.
 In lab1, I focus on implementing the core 
 modules required to access stored data on disk; in future labs, I
 add support for various query processing operators, as well as 
-transactions, locking, and concurrent queries.You'll find 
+transactions, locking, and concurrent queries.
 
 For lab1~lab4, [documents](https://github.com/inata1024/SimpleDB/tree/main/documents) and my [reports](https://github.com/inata1024/SimpleDB/tree/main/reports)(in **Chinese**) are avilable in this repository.
